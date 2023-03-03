@@ -23,14 +23,6 @@ on:
         default: false
         required: false
         type: boolean
-      ENABLE_SIZE_LIMIT_CHECK:
-        default: false
-        required: false
-        type: boolean
-      ENABLE_VISUAL_TESTING:
-        default: false
-        required: false
-        type: boolean
       IS_MONOREPO:
         default: false
         required: false
@@ -53,8 +45,6 @@ on:
       SLACK_WEBHOOK_PLATFORM_PROD:
         required: false
       SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
-        required: false
-      CI_SERVICE_ACCOUNT:
         required: false
 
 env:
@@ -138,69 +128,6 @@ jobs:
       - name: Build app
         if: inputs.IS_MONOREPO
         run: lerna run build
-
-      # TODO: Check with team if pantry is ready to switch to andresz1/size-limit-action
-      #
-      # TODO: [PLAT-2557] Skipped until size limit settings are in main (since it runs main size check for diff comment)
-      # - name: Check build size
-      #   if: inputs.ENABLE_SIZE_LIMIT_CHECK
-      #   uses: andresz1/size-limit-action@v1.7.0
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     skip_step: install
-      #     script: yarn size --json
-
-      # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
-      - name: Size Check
-        if: inputs.ENABLE_SIZE_LIMIT_CHECK
-        run: yarn size
-
-      - name: Percy Visual Testing
-        if: inputs.ENABLE_VISUAL_TESTING
-        env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-        run: yarn percy
-
-      - name: Set up Cloud SDK
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: google-github-actions/setup-gcloud@v0
-        with:
-          project_id: 'reside-stage'
-          service_account_key: ${{ secrets.CI_SERVICE_ACCOUNT }}
-          export_default_credentials: true
-
-      - name: Upload Storybook preview
-        if: inputs.ENABLE_VISUAL_TESTING
-        env:
-          PR_NUM: ${{ github.event.pull_request.number }}
-        run: |
-          ls $GITHUB_WORKSPACE/docs-dist || echo "docs-dist is currently empty"
-          bucket=side-plat-tools-public
-          folderPath=storybook-previews/pantry/$PR_NUM
-          echo "Uploading storybook preview to Cloud Storage path \"$bucket/$folderPath\""
-          gsutil -m cp -r $GITHUB_WORKSPACE/docs-dist/** gs://$bucket/$folderPath
-          echo ""
-          echo "Successfully uploaded storybook preview to Cloud Storage"
-          echo "STORYBOOK_PREVIEW_URL=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_ENV
-
-      - name: Find Storybook preview comment
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: peter-evans/find-comment@v2
-        id: fc
-        with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: Storybook preview
-
-      - name: Comment Storybook preview
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: peter-evans/create-or-update-comment@v2.1.1
-        with:
-          comment-id: ${{ steps.fc.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            Storybook preview [available here](${{ env.STORYBOOK_PREVIEW_URL }})
-          edit-mode: replace
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
