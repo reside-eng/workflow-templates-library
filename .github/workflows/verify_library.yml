@@ -1,0 +1,148 @@
+name: Verify Library
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        default: '18.x'
+        required: false
+        type: string
+      TIMEOUT:
+        default: 15
+        required: false
+        type: number
+      PACKAGE_MANAGER:
+        default: yarn-berry
+        required: false
+        type: string
+      ENABLE_TYPES_CHECK:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_FORMAT_CHECK:
+        default: false
+        required: false
+        type: boolean
+      IS_MONOREPO:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_SLACK_NOTIFICATION:
+        default: true
+        required: false
+        type: boolean
+      SLACK_NOTIFICATION_SECRET:
+        default: 'SLACK_WEBHOOK_CORE_NON_PROD'
+        required: false
+        type: string
+
+    #Note: Due to some github actions limitations all the slack webhook secrets that could be used by the librairies need to be added here with required: false
+    secrets:
+      NPM_READ_TOKEN:
+        required: true
+      SLACK_WEBHOOK_CORE_NON_PROD:
+        required: false
+      SLACK_WEBHOOK_PLATFORM_PROD:
+        required: false
+      SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
+        required: false
+
+env:
+  NODE_VERSION: ${{ inputs.NODE_VERSION }}
+
+jobs:
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Get yarn cache directory path
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn config get cacheFolder)"
+
+      - uses: actions/cache@v3
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Configure NPM auth token
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
+
+      - name: Configure Package Manager
+        if: inputs.PACKAGE_MANAGER == 'yarn'
+        run: |
+          echo Configuring NPM_TOKEN globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
+          npm whoami
+
+      - name: Install dependencies with Yarn-Berry
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: yarn install --immutable
+      
+      - name: Install dependencies with Yarn
+        if: inputs.PACKAGE_MANAGER == 'yarn'
+        run: yarn install --frozen-lockfile
+
+      - name: Verify lint
+        run: yarn lint
+
+      - name: Check types
+        if: inputs.ENABLE_TYPES_CHECK
+        ## TODO: Ensure all librairies with types check enabled implement types command according to their needs
+        run: yarn types
+
+      - name: Check formatting
+        if: inputs.ENABLE_FORMAT_CHECK
+        ## TODO: Ensure all librairies with format check enabled implement format:check command according to their needs
+        run: yarn format:check
+
+      - name: Test
+        ## TODO: Ensure all librairies implement test:cov command according to their needs
+        run: yarn test:cov
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v1.2.4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app
+        if: inputs.IS_MONOREPO == 'false'
+        run: yarn build
+
+      - name: Build app
+        if: inputs.IS_MONOREPO
+        run: lerna run build
+
+  notification:
+    if: always() && inputs.ENABLE_SLACK_NOTIFICATION
+    name: notification
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3.3.0
+
+      - uses: technote-space/workflow-conclusion-action@v3.0.3
+
+      - uses: reside-eng/workflow-status-notification-action@v1.2.2
+        with:
+          current-status: ${{ env.WORKFLOW_CONCLUSION }}
+          slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
