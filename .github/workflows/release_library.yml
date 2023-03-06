@@ -1,0 +1,253 @@
+name: Release Library
+
+on:
+  workflow_call:
+    inputs:
+      NODE_VERSION:
+        default: '18.x'
+        required: false
+        type: string
+      TIMEOUT:
+        default: 15
+        required: false
+        type: number
+      PACKAGE_MANAGER:
+        default: yarn-berry
+        required: false
+        type: string
+      ENABLE_TYPES_CHECK:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_FORMAT_CHECK:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_SIZE_LIMIT_CHECK:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_VISUAL_TESTING:
+        default: false
+        required: false
+        type: boolean
+      IS_MONOREPO:
+        default: false
+        required: false
+        type: boolean
+      ENABLE_SLACK_NOTIFICATION:
+        default: true
+        required: false
+        type: boolean
+      SLACK_NOTIFICATION_SECRET:
+        default: 'SLACK_WEBHOOK_CORE_NON_PROD'
+        required: false
+        type: string
+
+    secrets:
+      NPM_PUBLISH_TOKEN:
+        required: true
+      #Note: Due to some github actions limitations all the slack webhook secrets that could be used by the librairies need to be added here with required: false
+      SLACK_WEBHOOK_CORE_NON_PROD:
+        required: false
+      SLACK_WEBHOOK_PLATFORM_PROD:
+        required: false
+      SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
+        required: false
+      #Secret needed when ENABLE_VISUAL_TESTING = true:
+      # - SIDE_CI_APPLICATION_ID
+      # - SIDE_CI_APPLICATION_PRIVATE_KEY
+      # - PERCY_TOKEN
+      SIDE_CI_APPLICATION_ID:
+        required: false
+      SIDE_CI_APPLICATION_PRIVATE_KEY:
+        required: false
+      PERCY_TOKEN:
+        required: false
+
+env:
+  NODE_VERSION: ${{ inputs.NODE_VERSION }}
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Get yarn cache directory path
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        id: yarn-cache-dir-path
+        run: echo "::set-output name=dir::$(yarn config get cacheFolder)"
+
+      - uses: actions/cache@v3
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+        with:
+          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-yarn-
+
+      - name: Configure NPM auth token
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+
+      - name: Configure Package Manager
+        if: inputs.PACKAGE_MANAGER == 'yarn'
+        run: |
+          echo Configuring NPM_TOKEN globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_PUBLISH_TOKEN }}
+          npm whoami
+
+      - name: Install dependencies with Yarn-Berry
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: yarn install --immutable
+      
+      - name: Install dependencies with Yarn
+        if: inputs.PACKAGE_MANAGER == 'yarn'
+        run: yarn install --frozen-lockfile
+
+      - name: Verify lint
+        run: yarn lint
+
+      - name: Check types
+        if: inputs.ENABLE_TYPES_CHECK
+        ## TODO: Ensure all librairies with types check enabled implement types command according to their needs
+        run: yarn types
+
+      - name: Check formatting
+        if: inputs.ENABLE_FORMAT_CHECK
+        ## TODO: Ensure all librairies with format check enabled implement format:check command according to their needs
+        run: yarn format:check
+
+      - name: Test
+        ## TODO: Ensure all librairies implement test:cov command according to their needs
+        run: yarn test:cov
+
+      - name: Upload coverage to Coveralls
+        uses: coverallsapp/github-action@v1.2.4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app
+        if: inputs.IS_MONOREPO == 'false'
+        run: yarn build
+
+      # TODO: Check with team if pantry is ready to switch to andresz1/size-limit-action
+      #
+      # TODO: [PLAT-2557] Skipped until size limit settings are in main (since it runs main size check for diff comment)
+      # - name: Check build size
+      #   if: inputs.ENABLE_SIZE_LIMIT_CHECK
+      #   uses: andresz1/size-limit-action@v1.7.0
+      #   with:
+      #     github_token: ${{ secrets.GITHUB_TOKEN }}
+      #     skip_step: install
+      #     script: yarn size --json
+      #
+      # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
+      - name: Size Check
+        if: inputs.ENABLE_SIZE_LIMIT_CHECK
+        run: yarn size
+
+      - name: Build Storybook
+        if: inputs.ENABLE_VISUAL_TESTING
+        run: yarn storybook:build
+
+      - name: Publish Storybook to GH Pages
+        if: inputs.ENABLE_VISUAL_TESTING
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./docs-dist
+
+      - name: Percy Visual Testing
+        if: inputs.ENABLE_VISUAL_TESTING
+        env:
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+        run: yarn percy
+
+      - name: Semantic Release
+        if: inputs.IS_MONOREPO == 'false'
+        uses: cycjimmy/semantic-release-action@v3
+        id: semantic
+        with:
+          semantic_version: ^18
+          branches: |
+            [
+              '+([0-9])?(.{+([0-9]),x}).x',
+              'main',
+              'next',
+              'next-major',
+              {name: 'beta', prerelease: true},
+              {name: 'alpha', prerelease: true}
+            ]
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build app
+        if: inputs.IS_MONOREPO
+        run: lerna run build
+
+      - name: Get Token
+        if: inputs.IS_MONOREPO
+        id: get-workflow-token
+        uses: peter-murray/workflow-application-token-action@v2
+        with:
+          application_id: ${{ secrets.SIDE_CI_APPLICATION_ID }}
+          application_private_key: ${{ secrets.SIDE_CI_APPLICATION_PRIVATE_KEY }}
+          permissions: 'administration:write, contents:write'
+
+      - name: Configure Git to CI user
+        if: inputs.IS_MONOREPO
+        run: |
+          git config --global user.email 23222038+reside-camacho@users.noreply.github.com
+          git config --global user.name reside-camacho
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY
+        env:
+          GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+
+      - name: Publish to @latest dist-tag
+        if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
+        run: |
+          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
+          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
+        env:
+          GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch "*"
+
+      - name: Publish to a prerelease dist-tag
+        if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
+        run: |
+          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+        env:
+          GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch "*"
+
+  notification:
+    if: always() && inputs.ENABLE_SLACK_NOTIFICATION
+    name: notification
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3.3.0
+
+      - uses: technote-space/workflow-conclusion-action@v3.0.3
+
+      - uses: reside-eng/workflow-status-notification-action@v1.2.2
+        with:
+          current-status: ${{ env.WORKFLOW_CONCLUSION }}
+          slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
