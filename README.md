@@ -63,3 +63,4 @@ Templates for Side librairies github actions
 | SIDE_CI_APPLICATION_ID | `false` |
 | SIDE_CI_APPLICATION_PRIVATE_KEY | `false` |
 | PERCY_TOKEN | `false` |
+ 
