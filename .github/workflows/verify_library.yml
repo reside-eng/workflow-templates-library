@@ -56,13 +56,15 @@ on:
         required: false
       CI_SERVICE_ACCOUNT:
         required: false
+      PERCY_TOKEN:
+        required: false
 
 env:
   NODE_VERSION: ${{ inputs.NODE_VERSION }}
 
 jobs:
-  build:
-    name: build
+  verify:
+    name: verify
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
     steps:
@@ -149,11 +151,15 @@ jobs:
       #     github_token: ${{ secrets.GITHUB_TOKEN }}
       #     skip_step: install
       #     script: yarn size --json
-
+      #
       # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
       - name: Size Check
         if: inputs.ENABLE_SIZE_LIMIT_CHECK
         run: yarn size
+
+      - name: Build Storybook
+        if: inputs.ENABLE_VISUAL_TESTING
+        run: yarn storybook:build
 
       - name: Percy Visual Testing
         if: inputs.ENABLE_VISUAL_TESTING
@@ -205,7 +211,7 @@ jobs:
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
     name: notification
-    needs: [build]
+    needs: [verify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
