@@ -15,18 +15,6 @@ on:
         default: yarn-berry
         required: false
         type: string
-      ENABLE_TYPES_CHECK:
-        default: false
-        required: false
-        type: boolean
-      ENABLE_FORMAT_CHECK:
-        default: false
-        required: false
-        type: boolean
-      ENABLE_SIZE_LIMIT_CHECK:
-        default: false
-        required: false
-        type: boolean
       ENABLE_VISUAL_TESTING:
         default: false
         required: false
@@ -40,7 +28,7 @@ on:
         required: false
         type: boolean
       SLACK_NOTIFICATION_SECRET:
-        default: 'SLACK_WEBHOOK_CORE_NON_PROD'
+        default: 'SLACK_WEBHOOK_PLATFORM_PROD'
         required: false
         type: string
 
@@ -69,8 +57,8 @@ env:
   NODE_VERSION: ${{ inputs.NODE_VERSION }}
 
 jobs:
-  verify:
-    name: verify
+  release:
+    name: release
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
     steps:
@@ -117,22 +105,9 @@ jobs:
         if: inputs.PACKAGE_MANAGER == 'yarn'
         run: yarn install --frozen-lockfile
 
-      - name: Verify lint
-        run: yarn lint
-
-      - name: Check types
-        if: inputs.ENABLE_TYPES_CHECK
-        ## TODO: Ensure all librairies with types check enabled implement types command according to their needs
-        run: yarn types
-
-      - name: Check formatting
-        if: inputs.ENABLE_FORMAT_CHECK
-        ## TODO: Ensure all librairies with format check enabled implement format:check command according to their needs
-        run: yarn format:check
-
       - name: Test
         ## TODO: Ensure all librairies implement test:cov command according to their needs
-        run: yarn test:cov
+        run: yarn test:coverage
 
       - name: Upload coverage to Coveralls
         uses: coverallsapp/github-action@v1.2.4
@@ -140,24 +115,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
-        if: inputs.IS_MONOREPO == 'false'
         run: yarn build
-
-      # TODO: Check with team if pantry is ready to switch to andresz1/size-limit-action
-      #
-      # TODO: [PLAT-2557] Skipped until size limit settings are in main (since it runs main size check for diff comment)
-      # - name: Check build size
-      #   if: inputs.ENABLE_SIZE_LIMIT_CHECK
-      #   uses: andresz1/size-limit-action@v1.7.0
-      #   with:
-      #     github_token: ${{ secrets.GITHUB_TOKEN }}
-      #     skip_step: install
-      #     script: yarn size --json
-      #
-      # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
-      - name: Size Check
-        if: inputs.ENABLE_SIZE_LIMIT_CHECK
-        run: yarn size
 
       - name: Build Storybook
         if: inputs.ENABLE_VISUAL_TESTING
@@ -194,10 +152,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build app
-        if: inputs.IS_MONOREPO
-        run: lerna run build
-
       - name: Get Token
         if: inputs.IS_MONOREPO
         id: get-workflow-token
@@ -210,6 +164,7 @@ jobs:
       - name: Configure Git to CI user
         if: inputs.IS_MONOREPO
         run: |
+          # This is needed because Lerna will write to the CHANGELOG and push a commit to the repo
           git config --global user.email 23222038+reside-camacho@users.noreply.github.com
           git config --global user.name reside-camacho
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY
@@ -237,7 +192,7 @@ jobs:
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
     name: notification
-    needs: [verify]
+    needs: [release]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

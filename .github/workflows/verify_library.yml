@@ -40,7 +40,7 @@ on:
         required: false
         type: boolean
       SLACK_NOTIFICATION_SECRET:
-        default: 'SLACK_WEBHOOK_CORE_NON_PROD'
+        default: 'SLACK_WEBHOOK_PLATFORM_PROD'
         required: false
         type: string
 
@@ -122,7 +122,7 @@ jobs:
       - name: Check types
         if: inputs.ENABLE_TYPES_CHECK
         ## TODO: Ensure all librairies with types check enabled implement types command according to their needs
-        run: yarn types
+        run: yarn types:check
 
       - name: Check formatting
         if: inputs.ENABLE_FORMAT_CHECK
@@ -131,7 +131,7 @@ jobs:
 
       - name: Test
         ## TODO: Ensure all librairies implement test:cov command according to their needs
-        run: yarn test:cov
+        run: yarn test:coverage
 
       - name: Upload coverage to Coveralls
         uses: coverallsapp/github-action@v1.2.4
@@ -139,12 +139,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
-        if: inputs.IS_MONOREPO == 'false'
         run: yarn build
-
-      - name: Build app
-        if: inputs.IS_MONOREPO
-        run: lerna run build
 
       # TODO: Check with team if pantry is ready to switch to andresz1/size-limit-action
       #
@@ -160,7 +155,7 @@ jobs:
       # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
       - name: Size Check
         if: inputs.ENABLE_SIZE_LIMIT_CHECK
-        run: yarn size
+        run: yarn size:check
 
       - name: Build Storybook
         if: inputs.ENABLE_VISUAL_TESTING
