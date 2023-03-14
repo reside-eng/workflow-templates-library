@@ -47,7 +47,7 @@ on:
     secrets:
       NPM_READ_TOKEN:
         required: true
-      #Note: Due to some github actions limitations all the slack webhook secrets that could be used by the librairies need to be added here with required: false
+      # Note: Due to some github actions limitations all the slack webhook secrets that could be used by the libraries need to be added here with required: false
       SLACK_WEBHOOK_CORE_NON_PROD:
         required: false
       SLACK_WEBHOOK_PLATFORM_PROD:
@@ -56,7 +56,7 @@ on:
         required: false
       SLACK_WEBHOOK_UI_WG:
         required: false
-      #Secret needed when ENABLE_VISUAL_TESTING = true:
+      # Secret needed when ENABLE_VISUAL_TESTING = true:
       # - CI_SERVICE_ACCOUNT
       # - PERCY_TOKEN
       CI_SERVICE_ACCOUNT:
@@ -121,17 +121,17 @@ jobs:
 
       - name: Check types
         if: inputs.ENABLE_TYPES_CHECK
-        ## TODO: Ensure all librairies with types check enabled implement types command according to their needs
+        ## TODO: Ensure all libraries with types check enabled implement types command according to their needs
         run: yarn types:check
 
       - name: Check formatting
         if: inputs.ENABLE_FORMAT_CHECK
-        ## TODO: Ensure all librairies with format check enabled implement format:check command according to their needs
+        ## TODO: Ensure all libraries with format check enabled implement format:check command according to their needs
         run: yarn format:check
 
       - name: Test
-        ## TODO: Ensure all librairies implement test:cov command according to their needs
-        run: yarn test:coverage
+        ## TODO: Ensure all libraries implement test:cov command according to their needs
+        run: yarn test:cov
 
       - name: Upload coverage to Coveralls
         uses: coverallsapp/github-action@v1.2.4

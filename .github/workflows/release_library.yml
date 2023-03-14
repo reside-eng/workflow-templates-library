@@ -107,7 +107,7 @@ jobs:
 
       - name: Test
         ## TODO: Ensure all librairies implement test:cov command according to their needs
-        run: yarn test:coverage
+        run: yarn test:cov
 
       - name: Upload coverage to Coveralls
         uses: coverallsapp/github-action@v1.2.4
