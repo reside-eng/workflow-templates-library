@@ -1,0 +1,22 @@
+{
+  "name": "workflow-templates-library",
+  "version": "0.0.0-development",
+  "description": "Templates for Side Inc. Github Actions workflows",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reside-eng/workflow-templates-library.git"
+  },
+  "author": "Side Inc",
+  "license": "UNLICENSED",
+  "bugs": {
+    "url": "https://github.com/reside-eng/workflow-templates-library/issues"
+  },
+  "homepage": "https://github.com/reside-eng/workflow-templates-library#readme",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "private": true
+}

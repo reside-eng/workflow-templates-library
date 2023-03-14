@@ -1,0 +1,9 @@
+* @reside-eng/devops
+
+# Skip assigning dep updates (handled by Renovate)
+.github/workflows
+package.json
+yarn.lock
+
+# Notify Platform Tools team of updates to Renovate config
+renovate.json @reside-eng/platform-tools
