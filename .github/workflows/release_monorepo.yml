@@ -15,10 +15,6 @@ on:
         default: yarn-berry
         required: false
         type: string
-      ENABLE_VISUAL_TESTING:
-        default: false
-        required: false
-        type: boolean
       ENABLE_SLACK_NOTIFICATION:
         default: true
         required: false
@@ -38,10 +34,6 @@ on:
         required: false
       SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
         required: false
-      #Secret needed when ENABLE_VISUAL_TESTING = true:
-      # - SIDE_CI_APPLICATION_ID
-      # - SIDE_CI_APPLICATION_PRIVATE_KEY
-      # - PERCY_TOKEN
       SIDE_CI_APPLICATION_ID:
         required: false
       SIDE_CI_APPLICATION_PRIVATE_KEY:
@@ -113,39 +105,40 @@ jobs:
       - name: Build app
         run: yarn build
 
-      - name: Build Storybook
-        if: inputs.ENABLE_VISUAL_TESTING
-        run: yarn storybook:build
-
-      - name: Publish Storybook to GH Pages
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Get Token
+        id: get-workflow-token
+        uses: peter-murray/workflow-application-token-action@v2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./docs-dist
+          application_id: ${{ secrets.SIDE_CI_APPLICATION_ID }}
+          application_private_key: ${{ secrets.SIDE_CI_APPLICATION_PRIVATE_KEY }}
+          permissions: 'administration:write, contents:write'
 
-      - name: Percy Visual Testing
-        if: inputs.ENABLE_VISUAL_TESTING
+      - name: Configure Git to CI user
+        run: |
+          # This is needed because Lerna will write to the CHANGELOG and push a commit to the repo
+          git config --global user.email 23222038+reside-camacho@users.noreply.github.com
+          git config --global user.name reside-camacho
+          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY
         env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-        run: yarn percy
+          GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
 
-      - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v3
-        id: semantic
-        with:
-          semantic_version: ^18
-          branches: |
-            [
-              '+([0-9])?(.{+([0-9]),x}).x',
-              'main',
-              'next',
-              'next-major',
-              {name: 'beta', prerelease: true},
-              {name: 'alpha', prerelease: true}
-            ]
+      - name: Publish to @latest dist-tag
+        if: github.ref == 'refs/heads/main'
+        run: |
+          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
+          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch "*"
+
+      - name: Publish to a prerelease dist-tag
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+        env:
+          GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch "*"
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
