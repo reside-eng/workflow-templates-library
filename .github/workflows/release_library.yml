@@ -135,7 +135,7 @@ jobs:
         run: yarn percy
 
       - name: Semantic Release
-        if: inputs.IS_MONOREPO == 'false'
+        if: inputs.IS_MONOREPO == false
         uses: cycjimmy/semantic-release-action@v3
         id: semantic
         with:
