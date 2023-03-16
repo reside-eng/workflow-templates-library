@@ -91,7 +91,6 @@ jobs:
           yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
 
       - name: Configure Package Manager
-        if: inputs.PACKAGE_MANAGER == 'yarn'
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_PUBLISH_TOKEN }}
