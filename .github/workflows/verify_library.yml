@@ -179,10 +179,11 @@ jobs:
         if: inputs.ENABLE_VISUAL_TESTING
         env:
           PR_NUM: ${{ github.event.pull_request.number }}
+          REPO_NAME: ${{ github.event.repository.name }}
         run: |
           ls $GITHUB_WORKSPACE/docs-dist || echo "docs-dist is currently empty"
           bucket=side-plat-tools-public
-          folderPath=storybook-previews/pantry/$PR_NUM
+          folderPath=storybook-previews/$REPO_NAME/$PR_NUM
           echo "Uploading storybook preview to Cloud Storage path \"$bucket/$folderPath\""
           gsutil -m cp -r $GITHUB_WORKSPACE/docs-dist/** gs://$bucket/$folderPath
           echo ""
