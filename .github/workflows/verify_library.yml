@@ -172,7 +172,7 @@ jobs:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
-        if: inputs.ENABLE_PLAYWRIGHT
+        if: inputs.ENABLE_VISUAL_TESTING
         uses: ./actions/storybook
         id: storybook
   
