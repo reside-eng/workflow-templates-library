@@ -1,0 +1,49 @@
+name: 'Hello World'
+description: 'Greet someone'
+inputs:
+  who-to-greet:  # id of input
+    description: 'Who to greet'
+    required: true
+    default: 'World'
+outputs:
+  random-number:
+    description: "Random number"
+    value: ${{ steps.random-number-generator.outputs.random-number }}
+runs:
+  using: "composite"
+  steps:
+    - name: Install chromium
+      run: npx playwright install --with-deps chromium
+
+    - name: Install Google Fonts
+      run: |
+        wget -O Inter.zip https://fonts.google.com/download?family=Inter
+        unzip -d Inter/ Inter.zip
+        mv Inter /usr/share/fonts/
+        fc-cache -fv
+
+    - name: Run integration tests
+      run: yarn test:integration
+
+    - name: Auth Cloud SDK
+      uses: google-github-actions/auth@v1
+      with:
+        project_id: 'reside-stage'
+        credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v1
+
+    - name: Upload Playwright preview
+      env:
+        PR_NUM: ${{ github.event.pull_request.number }}
+        REPO_NAME: ${{ github.event.repository.name }}
+      run: |
+        ls $GITHUB_WORKSPACE/playwright-report || echo "playwright-report is currently empty"
+        bucket=side-plat-tools-public
+        folderPath=playwright-previews/$REPO_NAME/$PR_NUM
+        echo "Uploading playwright preview to Cloud Storage path \"$bucket/$folderPath\""
+        gsutil -m cp $GITHUB_WORKSPACE/playwright-report/** gs://$bucket/$folderPath
+        echo ""
+        echo "Successfully uploaded playwright preview to Cloud Storage"
+        echo "PLAYWRIGHT_PREVIEW_URL=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_ENV
