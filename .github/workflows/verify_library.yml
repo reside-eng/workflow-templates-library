@@ -143,16 +143,6 @@ jobs:
         if: inputs.ENABLE_SIZE_LIMIT_CHECK
         run: yarn size:check
 
-      - name: Build Storybook
-        if: inputs.ENABLE_VISUAL_TESTING
-        run: yarn storybook:build
-
-      - name: Percy Visual Testing
-        if: inputs.ENABLE_VISUAL_TESTING
-        env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-        run: yarn percy
-
       - name: Auth Cloud SDK
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
         uses: google-github-actions/auth@v1
@@ -166,14 +156,14 @@ jobs:
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
-        uses: ./actions/playwright
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@playwright
         id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
         if: inputs.ENABLE_VISUAL_TESTING
-        uses: ./actions/storybook
+        uses: reside-eng/workflow-templates-library/.github/actions/storybook@playwright
         id: storybook
   
       - name: Find preview comment
