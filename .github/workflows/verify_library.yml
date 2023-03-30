@@ -82,15 +82,11 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Configure NPM auth token
-        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
-
       - name: Configure Package Manager
         if: inputs.PACKAGE_MANAGER == 'yarn'
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
+          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
 
@@ -153,13 +149,16 @@ jobs:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
         run: yarn percy
 
-      - name: Set up Cloud SDK
+      - name: Auth Cloud SDK
         if: inputs.ENABLE_VISUAL_TESTING
-        uses: google-github-actions/setup-gcloud@v0
+        uses: google-github-actions/auth@v1
         with:
           project_id: 'reside-stage'
-          service_account_key: ${{ secrets.CI_SERVICE_ACCOUNT }}
-          export_default_credentials: true
+          credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
+
+      - name: Set up Cloud SDK
+        if: inputs.ENABLE_VISUAL_TESTING
+        uses: google-github-actions/setup-gcloud@v1
 
       - name: Upload Storybook preview
         if: inputs.ENABLE_VISUAL_TESTING
