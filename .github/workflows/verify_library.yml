@@ -183,7 +183,7 @@ jobs:
 
       - name: Playwright
         if: inputs.ENABLE_VISUAL_TESTING
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright.yml@playwright
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@playwright
   
       # - name: Upload Playwright preview
       #   if: inputs.ENABLE_PLAYWRIGHT
