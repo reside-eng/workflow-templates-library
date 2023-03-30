@@ -1,5 +1,9 @@
 name: 'Playwright'
 description: 'Run Playwright'
+inputs:
+  service-account:
+    description: 'Who to greet'
+    required: true
 runs:
   using: "composite"
   steps:
@@ -23,7 +27,7 @@ runs:
       uses: google-github-actions/auth@v1
       with:
         project_id: 'reside-stage'
-        credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
+        credentials_json: '${{ inputs.service-account }}'
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v1

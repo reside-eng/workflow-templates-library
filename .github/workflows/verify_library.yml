@@ -184,6 +184,8 @@ jobs:
       - name: Playwright
         if: inputs.ENABLE_VISUAL_TESTING
         uses: reside-eng/workflow-templates-library/.github/actions/playwright@playwright
+        with:
+          service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
   
       # - name: Upload Playwright preview
       #   if: inputs.ENABLE_PLAYWRIGHT
