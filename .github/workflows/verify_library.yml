@@ -31,6 +31,10 @@ on:
         default: false
         required: false
         type: boolean
+      ENABLE_PLAYWRIGHT:
+        default: false
+        required: false
+        type: boolean
       IS_MONOREPO:
         default: false
         required: false
@@ -175,23 +179,57 @@ jobs:
           echo "Successfully uploaded storybook preview to Cloud Storage"
           echo "STORYBOOK_PREVIEW_URL=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_ENV
 
-      - name: Find Storybook preview comment
+      - name: Upload Playwright preview
+        if: inputs.ENABLE_PLAYWRIGHT
+        env:
+          PR_NUM: ${{ github.event.pull_request.number }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          ls $GITHUB_WORKSPACE/playwright-report || echo "playwright-report is currently empty"
+          bucket=side-plat-tools-public
+          folderPath=playwright-previews/$REPO_NAME/$PR_NUM
+          echo "Uploading playwright preview to Cloud Storage path \"$bucket/$folderPath\""
+          gsutil -m cp $GITHUB_WORKSPACE/playwright-report/** gs://$bucket/$folderPath
+          echo ""
+          echo "Successfully uploaded playwright preview to Cloud Storage"
+          previewUrl=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html
+          echo "PLAYWRIGHT_PREVIEW_URL=$previewUrl" >> $GITHUB_ENV
+
+          echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Playwright Preview Link</th>" >> $GITHUB_ENV
+          echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$previewUrl\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
+
+      - name: Find preview comment
         if: inputs.ENABLE_VISUAL_TESTING
         uses: peter-evans/find-comment@v2
         id: fc
         with:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
-          body-includes: Storybook preview
+          body-includes: Preview Links
 
-      - name: Comment Storybook preview
-        if: inputs.ENABLE_VISUAL_TESTING
+      - name: Comment preview links
+        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
         uses: peter-evans/create-or-update-comment@v2.1.1
         with:
           comment-id: ${{ steps.fc.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}
           body: |
-            Storybook preview [available here](${{ env.STORYBOOK_PREVIEW_URL }})
+            <table>
+              <!-- Preview Links Comment Anchor -->
+              <tr>
+                <th colspan="2">Storybook Preview Link</th>
+                $PLAYWRIGHT_PREVIEW_COLUMN_HEADER
+              </tr>
+              <tr>
+                <td>
+                  <a
+                    href="${{ env.STORYBOOK_PREVIEW_URL }}"
+                    >🔗 Storybook Preview</a
+                  >
+                </td>
+                $PLAYWRIGHT_PREVIEW_COLUMN
+              </tr>
+            </table>
           edit-mode: replace
 
   notification:
