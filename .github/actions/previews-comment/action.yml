@@ -3,10 +3,10 @@ description: 'Comment preview urls in Github PR'
 inputs:
   storybook-preview-url:
     description: 'Preview url for Storybook'
-    required: true
+    required: false
   playwright-preview-url:
     description: 'Preview url for Storybook'
-    required: true
+    required: false
 runs:
   using: "composite"
   steps:
@@ -24,10 +24,14 @@ runs:
         STORYBOOK_PREVIEW_URL: ${{ inputs.storybook-preview-url }}
         PLAYWRIGHT_PREVIEW_URL: ${{ inputs.playwright-preview-url }}
       run: |
-        echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th>Storybook Preview Link</th>" >> $GITHUB_ENV
-        echo "STORYBOOK_PREVIEW_COLUMN=<td><a href=\"$STORYBOOK_PREVIEW_URL\">🔗 Storybook Preview</a></td>" >> $GITHUB_ENV
-        echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th>Playwright Preview Link</th>" >> $GITHUB_ENV
-        echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$PLAYWRIGHT_PREVIEW_URL\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
+        if [ "$STORYBOOK_PREVIEW_URL" != "" ]; then
+          echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th>Storybook</th>" >> $GITHUB_ENV
+          echo "STORYBOOK_PREVIEW_COLUMN=<td><a href=\"$STORYBOOK_PREVIEW_URL\">🔗 Storybook Preview</a></td>" >> $GITHUB_ENV
+        fi
+        if [ "$PLAYWRIGHT_PREVIEW_URL" != "" ]; then
+          echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th>Playwright</th>" >> $GITHUB_ENV
+          echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$PLAYWRIGHT_PREVIEW_URL\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
+        fi
 
     - name: Comment preview links
       uses: peter-evans/create-or-update-comment@v2.1.1
