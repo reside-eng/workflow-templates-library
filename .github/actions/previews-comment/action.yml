@@ -24,9 +24,9 @@ runs:
         STORYBOOK_PREVIEW_URL: ${{ inputs.storybook-preview-url }}
         PLAYWRIGHT_PREVIEW_URL: ${{ inputs.playwright-preview-url }}
       run: |
-        echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Storybook Preview Link</th>" >> $GITHUB_ENV
+        echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th>Storybook Preview Link</th>" >> $GITHUB_ENV
         echo "STORYBOOK_PREVIEW_COLUMN=<td><a href=\"$STORYBOOK_PREVIEW_URL\">🔗 Storybook Preview</a></td>" >> $GITHUB_ENV
-        echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Playwright Preview Link</th>" >> $GITHUB_ENV
+        echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th>Playwright Preview Link</th>" >> $GITHUB_ENV
         echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$PLAYWRIGHT_PREVIEW_URL\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
 
     - name: Comment preview links
@@ -38,10 +38,12 @@ runs:
           <table>
             <!-- Preview Links Comment Anchor -->
             <tr>
+              <th>Tool</th>
               ${{ env.STORYBOOK_PREVIEW_COLUMN_HEADER }}
               ${{ env.PLAYWRIGHT_PREVIEW_COLUMN_HEADER }}
             </tr>
             <tr>
+              <td>Preview Link</td>
               ${{ env.STORYBOOK_PREVIEW_COLUMN }}
               ${{ env.PLAYWRIGHT_PREVIEW_COLUMN }}
             </tr>

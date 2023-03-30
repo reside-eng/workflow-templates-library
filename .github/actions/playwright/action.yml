@@ -24,19 +24,12 @@ runs:
       shell: bash
 
     - name: Run integration tests
-      run: yarn test:integration
       shell: bash
-
-    - name: Auth Cloud SDK
-      uses: google-github-actions/auth@v1
-      with:
-        project_id: 'reside-stage'
-        credentials_json: '${{ inputs.service-account }}'
-
-    - name: Set up Cloud SDK
-      uses: google-github-actions/setup-gcloud@v1
+      run: yarn test:integration
 
     - name: Upload Playwright preview
+      # Run even if integration tests fail to upload failure results
+      if: ${{ always() }}
       env:
         PR_NUM: ${{ github.event.pull_request.number }}
         REPO_NAME: ${{ github.event.repository.name }}
