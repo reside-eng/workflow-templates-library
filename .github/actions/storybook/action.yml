@@ -17,7 +17,7 @@ runs:
 
     - name: Percy Visual Testing
       env:
-        PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+        PERCY_TOKEN: ${{ inputs.PERCY_TOKEN }}
       run: yarn percy
       shell: bash
 
