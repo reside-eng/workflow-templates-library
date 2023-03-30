@@ -1,19 +1,11 @@
-name: 'Hello World'
-description: 'Greet someone'
-inputs:
-  who-to-greet:  # id of input
-    description: 'Who to greet'
-    required: true
-    default: 'World'
-outputs:
-  random-number:
-    description: "Random number"
-    value: ${{ steps.random-number-generator.outputs.random-number }}
+name: 'Playwright'
+description: 'Run Playwright'
 runs:
   using: "composite"
   steps:
     - name: Install chromium
       run: npx playwright install --with-deps chromium
+      shell: bash
 
     - name: Install Google Fonts
       run: |
@@ -21,9 +13,11 @@ runs:
         unzip -d Inter/ Inter.zip
         mv Inter /usr/share/fonts/
         fc-cache -fv
+      shell: bash
 
     - name: Run integration tests
       run: yarn test:integration
+      shell: bash
 
     - name: Auth Cloud SDK
       uses: google-github-actions/auth@v1
@@ -38,6 +32,7 @@ runs:
       env:
         PR_NUM: ${{ github.event.pull_request.number }}
         REPO_NAME: ${{ github.event.repository.name }}
+      shell: bash
       run: |
         ls $GITHUB_WORKSPACE/playwright-report || echo "playwright-report is currently empty"
         bucket=side-plat-tools-public
