@@ -71,20 +71,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Get yarn cache directory path
-        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
-        id: yarn-cache-dir-path
-        run: echo "::set-output name=dir::$(yarn config get cacheFolder)"
-
-      - uses: actions/cache@v3
-        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
-        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
-        with:
-          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
-          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-yarn-
-
       - name: Configure NPM auth token
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: |
