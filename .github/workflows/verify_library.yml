@@ -164,48 +164,18 @@ jobs:
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
         uses: google-github-actions/setup-gcloud@v1
 
-
-      - name: Upload Storybook preview
-        if: inputs.ENABLE_VISUAL_TESTING
-        env:
-          PR_NUM: ${{ github.event.pull_request.number }}
-          REPO_NAME: ${{ github.event.repository.name }}
-        run: |
-          ls $GITHUB_WORKSPACE/docs-dist || echo "docs-dist is currently empty"
-          bucket=side-plat-tools-public
-          folderPath=storybook-previews/$REPO_NAME/$PR_NUM
-          echo "Uploading storybook preview to Cloud Storage path \"$bucket/$folderPath\""
-          gsutil -m cp -r $GITHUB_WORKSPACE/docs-dist/** gs://$bucket/$folderPath
-          echo ""
-          echo "Successfully uploaded storybook preview to Cloud Storage"
-          echo "STORYBOOK_PREVIEW_URL=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_ENV
-
-
-      - name: Playwright
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright@playwright
+      - name: Run Playwright integration tests and upload preview
+        if: inputs.ENABLE_PLAYWRIGHT
+        uses: ./actions/playwright
+        id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
+      - name: Run Storybook and upload preview
+        if: inputs.ENABLE_PLAYWRIGHT
+        uses: ./actions/storybook
+        id: storybook
   
-      # - name: Upload Playwright preview
-      #   if: inputs.ENABLE_PLAYWRIGHT
-      #   env:
-      #     PR_NUM: ${{ github.event.pull_request.number }}
-      #     REPO_NAME: ${{ github.event.repository.name }}
-      #   run: |
-      #     ls $GITHUB_WORKSPACE/playwright-report || echo "playwright-report is currently empty"
-      #     bucket=side-plat-tools-public
-      #     folderPath=playwright-previews/$REPO_NAME/$PR_NUM
-      #     echo "Uploading playwright preview to Cloud Storage path \"$bucket/$folderPath\""
-      #     gsutil -m cp $GITHUB_WORKSPACE/playwright-report/** gs://$bucket/$folderPath
-      #     echo ""
-      #     echo "Successfully uploaded playwright preview to Cloud Storage"
-      #     previewUrl=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html
-      #     echo "PLAYWRIGHT_PREVIEW_URL=$previewUrl" >> $GITHUB_ENV
-
-      #     echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Playwright Preview Link</th>" >> $GITHUB_ENV
-      #     echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$previewUrl\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
-
       - name: Find preview comment
         if: inputs.ENABLE_VISUAL_TESTING
         uses: peter-evans/find-comment@v2
@@ -214,6 +184,17 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           comment-author: 'github-actions[bot]'
           body-includes: Preview Links
+
+      - name: Format comments
+        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
+        env:
+          STORYBOOK_PREVIEW_URL: ${{ steps.storybook.outputs.preview-url }}
+          PLAYWRIGHT_PREVIEW_URL: ${{ steps.playwright.outputs.preview-url }}
+        run: |
+          echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Storybook Preview Link</th>" >> $GITHUB_ENV
+          echo "STORYBOOK_PREVIEW_COLUMN=<td><a href=\"$STORYBOOK_PREVIEW_URL\">🔗 Storybook Preview</a></td>" >> $GITHUB_ENV
+          echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Playwright Preview Link</th>" >> $GITHUB_ENV
+          echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$PLAYWRIGHT_PREVIEW_URL\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
@@ -225,17 +206,12 @@ jobs:
             <table>
               <!-- Preview Links Comment Anchor -->
               <tr>
-                <th colspan="2">Storybook Preview Link</th>
-                $PLAYWRIGHT_PREVIEW_COLUMN_HEADER
+                ${{ env.STORYBOOK_PREVIEW_COLUMN_HEADER }}
+                ${{ env.PLAYWRIGHT_PREVIEW_COLUMN_HEADER }}
               </tr>
               <tr>
-                <td>
-                  <a
-                    href="${{ env.STORYBOOK_PREVIEW_URL }}"
-                    >🔗 Storybook Preview</a
-                  >
-                </td>
-                $PLAYWRIGHT_PREVIEW_COLUMN
+                ${{ env.STORYBOOK_PREVIEW_COLUMN }}
+                ${{ env.PLAYWRIGHT_PREVIEW_COLUMN }}
               </tr>
             </table>
           edit-mode: replace
