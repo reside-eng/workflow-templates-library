@@ -165,46 +165,15 @@ jobs:
         if: inputs.ENABLE_VISUAL_TESTING
         uses: reside-eng/workflow-templates-library/.github/actions/storybook@playwright
         id: storybook
-  
-      - name: Find preview comment
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: peter-evans/find-comment@v2
-        id: fc
         with:
-          issue-number: ${{ github.event.pull_request.number }}
-          comment-author: 'github-actions[bot]'
-          body-includes: Preview Links
-
-      - name: Format comments
-        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        env:
-          STORYBOOK_PREVIEW_URL: ${{ steps.storybook.outputs.preview-url }}
-          PLAYWRIGHT_PREVIEW_URL: ${{ steps.playwright.outputs.preview-url }}
-        run: |
-          echo "STORYBOOK_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Storybook Preview Link</th>" >> $GITHUB_ENV
-          echo "STORYBOOK_PREVIEW_COLUMN=<td><a href=\"$STORYBOOK_PREVIEW_URL\">🔗 Storybook Preview</a></td>" >> $GITHUB_ENV
-          echo "PLAYWRIGHT_PREVIEW_COLUMN_HEADER=<th colspan=\"2\">Playwright Preview Link</th>" >> $GITHUB_ENV
-          echo "PLAYWRIGHT_PREVIEW_COLUMN=<td><a href=\"$PLAYWRIGHT_PREVIEW_URL\">🔗 Playwright Preview</a></td>" >> $GITHUB_ENV
+          percy-token: ${{ secrets.PERCY_TOKEN }}
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: peter-evans/create-or-update-comment@v2.1.1
+        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@playwright
         with:
-          comment-id: ${{ steps.fc.outputs.comment-id }}
-          issue-number: ${{ github.event.pull_request.number }}
-          body: |
-            <table>
-              <!-- Preview Links Comment Anchor -->
-              <tr>
-                ${{ env.STORYBOOK_PREVIEW_COLUMN_HEADER }}
-                ${{ env.PLAYWRIGHT_PREVIEW_COLUMN_HEADER }}
-              </tr>
-              <tr>
-                ${{ env.STORYBOOK_PREVIEW_COLUMN }}
-                ${{ env.PLAYWRIGHT_PREVIEW_COLUMN }}
-              </tr>
-            </table>
-          edit-mode: replace
+          storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
+          playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION

@@ -1,5 +1,9 @@
 name: 'Storybook'
 description: 'Run Storybook and upload results to Google Cloud Storage'
+inputs:
+  percy-token:
+    description: 'Token for Percy'
+    required: true
 outputs:
   preview-url:
     description: "URL of Storybook Preview"
