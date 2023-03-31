@@ -86,18 +86,21 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
+      - name: Configure NPM auth token
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+
       - name: Configure Package Manager
-        if: inputs.PACKAGE_MANAGER == 'yarn'
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
-          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: yarn install --immutable
-      
+
       - name: Install dependencies with Yarn
         if: inputs.PACKAGE_MANAGER == 'yarn'
         run: yarn install --frozen-lockfile
