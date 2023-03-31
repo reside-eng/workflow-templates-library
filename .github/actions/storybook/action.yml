@@ -1,0 +1,38 @@
+name: 'Storybook'
+description: 'Run Storybook and upload results to Google Cloud Storage'
+inputs:
+  percy-token:
+    description: 'Token for Percy'
+    required: true
+outputs:
+  preview-url:
+    description: "URL of Storybook Preview"
+    value: ${{ steps.upload.outputs.preview-url }}
+runs:
+  using: "composite"
+  steps:
+    - name: Build Storybook
+      run: yarn storybook:build
+      shell: bash
+
+    - name: Percy Visual Testing
+      env:
+        PERCY_TOKEN: ${{ inputs.PERCY_TOKEN }}
+      run: yarn percy
+      shell: bash
+
+    - name: Upload Storybook preview
+      env:
+        PR_NUM: ${{ github.event.pull_request.number }}
+        REPO_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      id: upload
+      run: |
+        ls $GITHUB_WORKSPACE/docs-dist || echo "docs-dist is currently empty"
+        bucket=side-plat-tools-public
+        folderPath=storybook-previews/$REPO_NAME/$PR_NUM
+        echo "Uploading storybook preview to Cloud Storage path \"$bucket/$folderPath\""
+        gsutil -m cp -r $GITHUB_WORKSPACE/docs-dist/** gs://$bucket/$folderPath
+        echo ""
+        echo "Successfully uploaded Storybook preview to Cloud Storage"
+        echo "preview-url=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_OUTPUT

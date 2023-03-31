@@ -1,0 +1,46 @@
+name: 'Playwright'
+description: 'Run Playwright and upload results to Google Cloud Storage'
+inputs:
+  service-account:
+    description: 'Service account for authenticating Google for Cloud Storage Upload'
+    required: true
+outputs:
+  preview-url:
+    description: "URL of Playwright Preview"
+    value: ${{ steps.upload.outputs.playwright-preview-url }}
+runs:
+  using: "composite"
+  steps:
+    - name: Install chromium
+      run: npx playwright install --with-deps chromium
+      shell: bash
+
+    - name: Install Google Fonts
+      run: |
+        wget -O Inter.zip https://fonts.google.com/download?family=Inter
+        unzip -d Inter/ Inter.zip
+        mv Inter /usr/share/fonts/
+        fc-cache -fv
+      shell: bash
+
+    - name: Run integration tests
+      shell: bash
+      run: yarn test:integration
+
+    - name: Upload Playwright preview
+      # Run even if integration tests fail to upload failure results
+      if: ${{ always() }}
+      env:
+        PR_NUM: ${{ github.event.pull_request.number }}
+        REPO_NAME: ${{ github.event.repository.name }}
+      shell: bash
+      id: upload
+      run: |
+        ls $GITHUB_WORKSPACE/playwright-report || echo "playwright-report is currently empty"
+        bucket=side-plat-tools-public
+        folderPath=playwright-previews/$REPO_NAME/$PR_NUM
+        echo "Uploading playwright preview to Cloud Storage path \"$bucket/$folderPath\""
+        gsutil -m cp $GITHUB_WORKSPACE/playwright-report/** gs://$bucket/$folderPath
+        echo ""
+        echo "Successfully uploaded playwright preview to Cloud Storage"
+        echo "playwright-preview-url=https://tools.stage-preview-lb.sideinc.dev/$folderPath/index.html" >> $GITHUB_OUTPUT
