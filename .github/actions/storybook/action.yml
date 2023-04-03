@@ -6,10 +6,10 @@ inputs:
     required: true
 outputs:
   preview-url:
-    description: "URL of Storybook Preview"
+    description: 'URL of Storybook Preview'
     value: ${{ steps.upload.outputs.preview-url }}
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Build Storybook
       run: yarn storybook:build
@@ -17,7 +17,7 @@ runs:
 
     - name: Percy Visual Testing
       env:
-        PERCY_TOKEN: ${{ inputs.PERCY_TOKEN }}
+        PERCY_TOKEN: ${{ inputs.percy-token }}
       run: yarn percy
       shell: bash
 
