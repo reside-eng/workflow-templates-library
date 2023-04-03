@@ -19,9 +19,9 @@ runs:
         VERSION: ${{ inputs.chromium-version }}
       run: |
         if [ -z ${VERSION} ]; then
-          sudo apt-get -yq install chromium
+          sudo apt-get -yq install chromium-browser
         else
-          sudo apt-get -yq install chromium=${VERSION}
+          sudo apt-get -yq install chromium-browser=${VERSION}
         fi
       shell: bash
 
