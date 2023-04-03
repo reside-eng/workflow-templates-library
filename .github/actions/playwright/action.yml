@@ -38,10 +38,11 @@ runs:
         fc-cache -fv
       shell: bash
 
+    # Ubuntu installs chrome with snap, so the fonts need to be linked
     - name: Link system fonts
       run: |
-        mkdir -p /usr/bin/chromium/common/.config/fontconfig
-        cat >> /usr/bin/chromium/common/.config/fontconfig/fonts.conf <<EOF
+        mkdir -p ~/snap/chromium/current/.config/fontconfig
+        cat >> ~/snap/chromium/current/.config/fontconfig/fonts.conf << EOF
         <fontconfig>
           <include>/etc/fonts/conf.d</include>
         </fontconfig>
