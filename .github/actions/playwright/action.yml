@@ -38,7 +38,7 @@ runs:
           fonts-ipafont-gothic \
           fonts-wqy-zenhei \
           fonts-tlwg-loma-otf \
-          fonts-freefont-ttf'
+          fonts-freefont-ttf
       shell: bash
 
     - name: Install Google Fonts
