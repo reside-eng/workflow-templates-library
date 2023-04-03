@@ -3,7 +3,7 @@ description: 'Run Playwright and upload results to Google Cloud Storage'
 inputs:
   chromium-version:
     description: 'Chromium version to use for playwright tests'
-    required: true
+    required: false
   service-account:
     description: 'Service account for authenticating Google for Cloud Storage Upload'
     required: true
@@ -18,7 +18,11 @@ runs:
       env:
         VERSION: ${{ inputs.chromium-version }}
       run: |
-        apt-get install chromium=${VERSION}
+        if [ -z ${VERSION} ]; then
+          sudo apt-get -yq install chromium
+        else
+          sudo apt-get -yq install chromium=${VERSION}
+        fi
       shell: bash
 
     - name: Install Google Fonts

@@ -36,7 +36,6 @@ on:
         required: false
         type: boolean
       CHROMIUM_VERSION:
-        default: latest
         required: false
         type: string
       IS_MONOREPO:
