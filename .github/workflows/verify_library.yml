@@ -36,7 +36,6 @@ on:
         required: false
         type: boolean
       CHROMIUM_VERSION:
-        default: '111.0.5563.146-1'
         required: false
         type: string
       IS_MONOREPO:
