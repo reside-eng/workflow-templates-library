@@ -27,6 +27,7 @@ runs:
         fi
 
         chromium-browser --version
+        whereis chromium
       shell: bash
 
     - name: Install Google Fonts
