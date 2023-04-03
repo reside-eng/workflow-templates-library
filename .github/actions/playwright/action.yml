@@ -42,6 +42,13 @@ runs:
       shell: bash
       run: yarn test:integration
 
+    - name: Upload test results
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: playwright-report
+        path: playwright-report
+
     - name: Upload Playwright preview
       # Run even if integration tests fail to upload failure results
       if: ${{ always() }}
