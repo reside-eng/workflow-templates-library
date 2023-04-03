@@ -18,14 +18,15 @@ runs:
       env:
         VERSION: ${{ inputs.chromium-version }}
       run: |
+        sudo apt update
+
         if [ -z ${VERSION} ]; then
           sudo apt -yq install chromium-browser
         else
           sudo apt -yq install chromium-browser=${VERSION}
         fi
 
-        # refresh path
-        hash -r
+        chromium-browser --version
       shell: bash
 
     - name: Install Google Fonts
