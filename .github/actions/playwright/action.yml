@@ -1,18 +1,24 @@
 name: 'Playwright'
 description: 'Run Playwright and upload results to Google Cloud Storage'
 inputs:
+  chromium-version:
+    description: 'Chromium version to use for playwright tests'
+    required: true
   service-account:
     description: 'Service account for authenticating Google for Cloud Storage Upload'
     required: true
 outputs:
   preview-url:
-    description: "URL of Playwright Preview"
+    description: 'URL of Playwright Preview'
     value: ${{ steps.upload.outputs.playwright-preview-url }}
 runs:
-  using: "composite"
+  using: 'composite'
   steps:
     - name: Install chromium
-      run: npx playwright install --with-deps chromium
+      env:
+        VERSION: ${{ inputs.chromium-version }}
+      run: |
+        apk add --no-cache chromium=${VERSION}
       shell: bash
 
     - name: Install Google Fonts
