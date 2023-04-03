@@ -14,19 +14,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Install Google Fonts
-      run: |
-        wget -O Inter.zip https://fonts.google.com/download?family=Inter
-        unzip -d Inter/ Inter.zip
-        mv Inter /usr/share/fonts/
-        fc-cache -fv
-      shell: bash
-
-    - name: Install Liberation Fonts
-      run: |
-        sudo apt install -yq fonts-liberation
-      shell: bash
-
     - name: Install chromium
       env:
         VERSION: ${{ inputs.chromium-version }}
@@ -41,6 +28,24 @@ runs:
 
         chromium-browser --version
         whereis chromium
+      shell: bash
+
+    - name: Install Google Fonts
+      run: |
+        wget -O Inter.zip https://fonts.google.com/download?family=Inter
+        unzip -d Inter/ Inter.zip
+        mv Inter /usr/share/fonts/
+        fc-cache -fv
+      shell: bash
+
+    - name: Link system fonts
+      run: |
+        mkdir -p /usr/bin/chromium/common/.config/fontconfig
+        cat >> /usr/bin/chromium/common/.config/fontconfig/fonts.conf <<EOF
+        <fontconfig>
+          <include>/etc/fonts/conf.d</include>
+        </fontconfig>
+        EOF
       shell: bash
 
     - name: Run integration tests
