@@ -19,26 +19,11 @@ runs:
       env:
         VERSION: ${{ inputs.chromium-version }}
       run: |
-        wget -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_111.0.5563.146-1_amd64.deb
-        sudo apt install -yq /tmp/chrome.deb
+        sudo apt update
+        sudo apt install -yq chromium-browser
 
         chromium-browser --version
         whereis chromium
-      shell: bash
-
-    - name: Install Base Fonts
-      run: |
-        sudo apt install fonts-noto-color-emoji \
-          fonts-unifont \
-          libfontconfig1 \
-          libfreetype6 \
-          xfonts-cyrillic \
-          xfonts-scalable \
-          fonts-liberation \
-          fonts-ipafont-gothic \
-          fonts-wqy-zenhei \
-          fonts-tlwg-loma-otf \
-          fonts-freefont-ttf
       shell: bash
 
     - name: Install Google Fonts
@@ -47,18 +32,9 @@ runs:
         unzip -d Inter/ Inter.zip
         mv Inter /usr/share/fonts/
         fc-cache -fv
-      shell: bash
 
-    # Ubuntu installs chrome with snap, so the fonts need to be linked
-    # - name: Link system fonts
-    #   run: |
-    #     mkdir -p ~/snap/chromium/current/.config/fontconfig
-    #     cat >> ~/snap/chromium/current/.config/fontconfig/fonts.conf << EOF
-    #     <fontconfig>
-    #       <include>/etc/fonts/conf.d</include>
-    #     </fontconfig>
-    #     EOF
-    #   shell: bash
+        fc-match Inter
+      shell: bash
 
     - name: Run integration tests
       shell: bash
