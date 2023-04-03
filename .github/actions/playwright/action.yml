@@ -22,6 +22,11 @@ runs:
         fc-cache -fv
       shell: bash
 
+    - name: Install Liberation Fonts
+      run: |
+        sudo apt install -yq fonts-liberation
+      shell: bash
+
     - name: Install chromium
       env:
         VERSION: ${{ inputs.chromium-version }}
