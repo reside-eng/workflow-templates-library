@@ -26,6 +26,21 @@ runs:
         whereis chromium
       shell: bash
 
+    - name: Install Base Fonts
+      run: |
+        sudo apt install fonts-noto-color-emoji \
+          fonts-unifont \
+          libfontconfig1 \
+          libfreetype6 \
+          xfonts-cyrillic \
+          xfonts-scalable \
+          fonts-liberation \
+          fonts-ipafont-gothic \
+          fonts-wqy-zenhei \
+          fonts-tlwg-loma-otf \
+          fonts-freefont-ttf'
+      shell: bash
+
     - name: Install Google Fonts
       run: |
         wget -O Inter.zip https://fonts.google.com/download?family=Inter
