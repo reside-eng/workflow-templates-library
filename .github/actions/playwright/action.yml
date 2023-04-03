@@ -3,7 +3,7 @@ description: 'Run Playwright and upload results to Google Cloud Storage'
 inputs:
   chromium-version:
     description: 'Chromium version to use for playwright tests'
-    required: false
+    required: true
   service-account:
     description: 'Service account for authenticating Google for Cloud Storage Upload'
     required: true
@@ -18,13 +18,8 @@ runs:
       env:
         VERSION: ${{ inputs.chromium-version }}
       run: |
-        sudo apt update
-
-        if [ -z ${VERSION} ]; then
-          sudo apt -yq install chromium-browser
-        else
-          sudo apt -yq install chromium-browser=${VERSION}
-        fi
+        wget --no-verbose -O /tmp/chrome.deb https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${VERSION}_amd64.deb
+        sudo apt install -yq /tmp/chrome.deb
 
         chromium-browser --version
         whereis chromium
@@ -39,15 +34,15 @@ runs:
       shell: bash
 
     # Ubuntu installs chrome with snap, so the fonts need to be linked
-    - name: Link system fonts
-      run: |
-        mkdir -p ~/snap/chromium/current/.config/fontconfig
-        cat >> ~/snap/chromium/current/.config/fontconfig/fonts.conf << EOF
-        <fontconfig>
-          <include>/etc/fonts/conf.d</include>
-        </fontconfig>
-        EOF
-      shell: bash
+    # - name: Link system fonts
+    #   run: |
+    #     mkdir -p ~/snap/chromium/current/.config/fontconfig
+    #     cat >> ~/snap/chromium/current/.config/fontconfig/fonts.conf << EOF
+    #     <fontconfig>
+    #       <include>/etc/fonts/conf.d</include>
+    #     </fontconfig>
+    #     EOF
+    #   shell: bash
 
     - name: Run integration tests
       shell: bash
