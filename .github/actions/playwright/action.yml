@@ -22,7 +22,7 @@ runs:
         # sudo apt install -yq chromium-browser
         CHROMIUM_ROOT="http://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64"
 
-        wget -O chrome-linux.zip $CHROMIUM_ROOT/$VERSION/chrome-linux.zip
+        wget -O chrome-linux.zip $CHROMIUM_ROOT/1125950/chrome-linux.zip
         unzip -d chrome-linux/ chrome-linux.zip
 
         mv chrome-linux /usr/bin
