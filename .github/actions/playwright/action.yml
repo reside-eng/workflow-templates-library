@@ -4,7 +4,7 @@ inputs:
   chromium-version:
     description: 'Chromium version to use for playwright tests'
     required: false
-    default: '111.0.5563.146-1'
+    default: '1125950'
   service-account:
     description: 'Service account for authenticating Google for Cloud Storage Upload'
     required: true
@@ -19,8 +19,13 @@ runs:
       env:
         VERSION: ${{ inputs.chromium-version }}
       run: |
-        sudo apt update
-        sudo apt install -yq chromium-browser
+        # sudo apt install -yq chromium-browser
+        CHROMIUM_ROOT="http://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64"
+
+        wget -O chrome-linux.zip $CHROMIUM_ROOT/$VERSION/chrome-linux.zip
+        unzip -d chrome-linux/ chrome-linux.zip
+
+        mv chrome-linux /usr/bin
 
         chromium-browser --version
         whereis chromium
