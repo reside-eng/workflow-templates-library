@@ -23,7 +23,7 @@ runs:
         CHROMIUM_ROOT="http://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64"
 
         wget -O chrome-linux.zip $CHROMIUM_ROOT/1125950/chrome-linux.zip
-        unzip -d chrome-linux/ chrome-linux.zip
+        unzip chrome-linux.zip
 
         sudo mv chrome-linux /usr/bin
 
