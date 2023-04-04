@@ -30,7 +30,9 @@ runs:
       run: |
         wget -O Inter.zip https://fonts.google.com/download?family=Inter
         unzip -d Inter/ Inter.zip
-        mv Inter /usr/share/fonts/
+
+        mkdir -p ~/.fonts
+        mv Inter ~/.fonts
 
         fc-cache -rv
         fc-match Inter
