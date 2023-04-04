@@ -31,15 +31,8 @@ runs:
         wget -O Inter.zip https://fonts.google.com/download?family=Inter
         unzip -d Inter/ Inter.zip
         mv Inter /usr/share/fonts/
-      shell: bash
-
-    - name: Link and Refresh Fonts
-      run: |
-        sudo rm /var/cache/fontconfig/*
-        rm ~/.cache/fontconfig/*
 
         fc-cache -rv
-
         fc-match Inter
       shell: bash
 
