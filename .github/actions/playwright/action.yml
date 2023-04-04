@@ -25,7 +25,7 @@ runs:
         wget -O chrome-linux.zip $CHROMIUM_ROOT/1125950/chrome-linux.zip
         unzip -d chrome-linux/ chrome-linux.zip
 
-        mv chrome-linux /usr/bin
+        sudo mv chrome-linux /usr/bin
 
         chromium-browser --version
         whereis chromium
