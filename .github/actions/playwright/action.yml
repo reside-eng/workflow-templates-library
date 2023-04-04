@@ -35,10 +35,10 @@ runs:
 
     - name: Link and Refresh Fonts
       run: |
-        mkdir ~/snap/chromium/current/.config/fontconfig/conf.d
-        cp /etc/fonts/conf.d/* ~/snap/chromium/current/.config/fontconfig/conf.d
+        # mkdir ~/snap/chromium/current/.config/fontconfig/conf.d
+        # cp /etc/fonts/conf.d/* ~/snap/chromium/current/.config/fontconfig/conf.d
 
-        fc-cache -fv
+        sudo fc-cache -fv
 
         fc-match Inter
       shell: bash
