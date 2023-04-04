@@ -1,10 +1,6 @@
 name: 'Playwright'
 description: 'Run Playwright and upload results to Google Cloud Storage'
 inputs:
-  chromium-version:
-    description: 'Chromium version to use for playwright tests'
-    required: false
-    default: '1125950'
   service-account:
     description: 'Service account for authenticating Google for Cloud Storage Upload'
     required: true
@@ -16,16 +12,8 @@ runs:
   using: 'composite'
   steps:
     - name: Install chromium
-      env:
-        VERSION: ${{ inputs.chromium-version }}
       run: |
-        # sudo apt install -yq chromium-browser
-        CHROMIUM_ROOT="http://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64"
-
-        wget -O chrome-linux.zip $CHROMIUM_ROOT/1125950/chrome-linux.zip
-        unzip chrome-linux.zip
-
-        sudo mv chrome-linux /usr/bin
+        sudo apt install -yq chromium-browser
 
         chromium-browser --version
         whereis chromium
@@ -35,12 +23,8 @@ runs:
       run: |
         wget -O Inter.zip https://fonts.google.com/download?family=Inter
         unzip -d Inter/ Inter.zip
-
-        mkdir -p ~/.fonts
-        mv Inter ~/.fonts
-
-        fc-cache -rv
-        fc-match Inter
+        mv Inter /usr/share/fonts/
+        fc-cache -fv
       shell: bash
 
     - name: Run integration tests

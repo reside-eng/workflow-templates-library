@@ -35,9 +35,6 @@ on:
         default: false
         required: false
         type: boolean
-      CHROMIUM_VERSION:
-        required: false
-        type: string
       IS_MONOREPO:
         default: false
         required: false
@@ -165,7 +162,6 @@ jobs:
         uses: reside-eng/workflow-templates-library/.github/actions/playwright@chrome-version
         id: playwright
         with:
-          chromium-version: ${{ inputs.CHROMIUM_VERSION }}
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
