@@ -31,6 +31,13 @@ runs:
         wget -O Inter.zip https://fonts.google.com/download?family=Inter
         unzip -d Inter/ Inter.zip
         mv Inter /usr/share/fonts/
+      shell: bash
+
+    - name: Link and Refresh Fonts
+      run: |
+        mkdir ~/snap/chromium/current/.config/fontconfig/conf.d
+        cp /etc/fonts/conf.d/* ~/snap/chromium/current/.config/fontconfig/conf.d
+
         fc-cache -fv
 
         fc-match Inter
