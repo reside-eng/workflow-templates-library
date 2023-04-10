@@ -35,6 +35,9 @@ on:
         default: false
         required: false
         type: boolean
+      CHROMIUM_VERSION:
+        required: false
+        type: string
       IS_MONOREPO:
         default: false
         required: false
@@ -159,9 +162,10 @@ jobs:
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@set-chromium-version
         id: playwright
         with:
+          chromium-version: ${{ inputs.CHROMIUM_VERSION }}
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
@@ -173,6 +177,8 @@ jobs:
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
+        env:
+          - CHROMIUM_VERSION: ${{ inputs.CHROMIUM_VERSION }}
         uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
