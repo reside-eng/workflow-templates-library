@@ -177,8 +177,6 @@ jobs:
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        env:
-          - CHROMIUM_VERSION: ${{ inputs.CHROMIUM_VERSION }}
         uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
