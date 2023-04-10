@@ -18,10 +18,12 @@ runs:
       env:
         CHROMIUM_VERSION: ${{ inputs.chromium-version }}
       run: |
+        sudo apt update
+
         if [ -z "${CHROMIUM_VERSION}" ]; then 
-          sudo apt-get install chromium-browser
+          sudo apt install chromium-browser
         else
-          sudo apt-get install chromium-browser=${CHROMIUM_VERSION}
+          sudo apt install chromium-browser=${CHROMIUM_VERSION}
         fi
 
         chromium-browser --version
