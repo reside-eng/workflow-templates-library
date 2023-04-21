@@ -15,6 +15,10 @@ on:
         default: yarn-berry
         required: false
         type: string
+      ENABLE_BUILDING:
+        default: true
+        required: false
+        type: boolean
       ENABLE_TESTING:
         default: true
         required: false
@@ -133,6 +137,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
+        if: inputs.ENABLE_BUILDING
         run: yarn build
 
       # TODO: Check with team if pantry is ready to switch to andresz1/size-limit-action
