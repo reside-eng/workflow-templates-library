@@ -15,6 +15,10 @@ on:
         default: yarn-berry
         required: false
         type: string
+      ENABLE_TESTING:
+        default: true
+        required: false
+        type: boolean
       ENABLE_TYPES_CHECK:
         default: false
         required: false
@@ -119,10 +123,11 @@ jobs:
         run: yarn format:check
 
       - name: Test
-        ## TODO: Ensure all libraries implement test:cov command according to their needs
+        if: inputs.ENABLE_TESTING
         run: yarn test:cov
 
       - name: Upload coverage to Coveralls
+        if: inputs.ENABLE_TESTING
         uses: coverallsapp/github-action@v1.2.4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}

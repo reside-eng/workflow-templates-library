@@ -15,6 +15,10 @@ on:
         default: yarn-berry
         required: false
         type: string
+      ENABLE_TESTING:
+        default: true
+        required: false
+        type: boolean
       ENABLE_VISUAL_TESTING:
         default: false
         required: false
@@ -85,16 +89,17 @@ jobs:
       - name: Install dependencies with Yarn-Berry
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: yarn install --immutable
-      
+
       - name: Install dependencies with Yarn
         if: inputs.PACKAGE_MANAGER == 'yarn'
         run: yarn install --frozen-lockfile
 
       - name: Test
-        ## TODO: Ensure all librairies implement test:cov command according to their needs
+        if: inputs.ENABLE_TESTING
         run: yarn test:cov
 
       - name: Upload coverage to Coveralls
+        if: inputs.ENABLE_TESTING
         uses: coverallsapp/github-action@v1.2.4
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
