@@ -135,6 +135,8 @@ jobs:
         id: semantic
         with:
           semantic_version: ^18
+          extra_plugins: |
+            @semantic-release/exec
           branches: |
             [
               '+([0-9])?(.{+([0-9]),x}).x',
