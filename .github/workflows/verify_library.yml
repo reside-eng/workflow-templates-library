@@ -132,7 +132,7 @@ jobs:
 
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING
-        uses: coverallsapp/github-action@v1.2.4
+        uses: coverallsapp/github-action@v1.2.5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
