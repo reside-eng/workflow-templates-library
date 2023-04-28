@@ -97,7 +97,7 @@ jobs:
       - name: Configure NPM auth token
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
 
       - name: Configure Package Manager
         run: |
