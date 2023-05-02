@@ -100,11 +100,18 @@ jobs:
 
       - name: Test
         if: inputs.ENABLE_TESTING
-        run: yarn test:cov
+        run: |
+          testScript=$(cat package.json | jq -r --arg s "test" '.scripts[$s] // ""')
+          if [ "${testScript}" == "" ]; then
+            echo "::error file=package.json::test npm script is required to test app"
+            exit 1
+          fi
+          yarn test --coverage --silent --coverageReporters lcov --coverageReporters json-summary
 
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING
-        uses: coverallsapp/github-action@v2.1.2
+        uses: coverallsapp/github-action@v2
+        continue-on-error: true # Upload sometimes fails to to API issues with Coveralls
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
