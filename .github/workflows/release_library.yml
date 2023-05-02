@@ -104,7 +104,7 @@ jobs:
 
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING
-        uses: coverallsapp/github-action@v1.2.5
+        uses: coverallsapp/github-action@v2.1.2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
