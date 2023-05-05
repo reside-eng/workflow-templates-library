@@ -27,11 +27,23 @@ runs:
       shell: bash
       run: yarn test:integration
 
+    - name: Retrieve PR Number
+      run: |
+        if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+          echo "Running in Merge Queue!"
+          temp_name=${GITHUB_REF_NAME#gh-readonly-queue/main/pr-}
+          pr_num="${temp_name%-*}"
+        else
+          echo "Not running in Merge Queue!"
+          pr_num="${{ github.event.pull_request.number }}"
+        fi
+        echo "PR Number: $pr_num"
+        echo "PR_NUM=${pr_num}" >> $GITHUB_ENV
+
     - name: Upload Playwright preview
       # Run even if integration tests fail to upload failure results
       if: always()
       env:
-        PR_NUM: ${{ github.event.pull_request.number }}
         REPO_NAME: ${{ github.event.repository.name }}
       shell: bash
       id: upload
