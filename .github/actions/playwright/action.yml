@@ -28,6 +28,7 @@ runs:
       run: yarn test:integration
 
     - name: Retrieve PR Number
+      shell: bash
       run: |
         if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
           echo "Running in Merge Queue!"
