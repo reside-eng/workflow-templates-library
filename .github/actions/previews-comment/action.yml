@@ -10,11 +10,25 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Retrieve PR Number
+      shell: bash
+      run: |
+        if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+          echo "Running in Merge Queue!"
+          temp_name=${GITHUB_REF_NAME#gh-readonly-queue/main/pr-}
+          pr_num="${temp_name%-*}"
+        else
+          echo "Not running in Merge Queue!"
+          pr_num="${{ github.event.pull_request.number }}"
+        fi
+        echo "PR Number: $pr_num"
+        echo "PR_NUM=${pr_num}" >> $GITHUB_ENV
+
     - name: Find preview comment
       uses: peter-evans/find-comment@v2
       id: fc
       with:
-        issue-number: ${{ github.event.pull_request.number }}
+        issue-number: ${{ env.PR_NUM }}
         comment-author: 'github-actions[bot]'
         body-includes: Preview Links
 
@@ -37,7 +51,7 @@ runs:
       uses: peter-evans/create-or-update-comment@v2.1.1
       with:
         comment-id: ${{ steps.fc.outputs.comment-id }}
-        issue-number: ${{ github.event.pull_request.number }}
+        issue-number: ${{ env.PR_NUM }}
         body: |
           <table>
             <!-- Preview Links Comment Anchor -->
