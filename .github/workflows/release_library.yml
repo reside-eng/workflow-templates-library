@@ -72,6 +72,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v3
@@ -168,7 +171,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
 
-      - name: Cleanup .yarnrc.yml changes before
+      - name: Cleanup .yarnrc.yml changes before publish
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: |
           git restore .yarnrc.yml
