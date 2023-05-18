@@ -107,9 +107,7 @@ jobs:
 
       - name: Install dependencies with Yarn-Berry
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
-        run: |
-          yarn install --immutable
-          git diff .yarnrc.yml
+        run: yarn install --immutable
 
       - name: Install dependencies with Yarn
         if: inputs.PACKAGE_MANAGER == 'yarn'
