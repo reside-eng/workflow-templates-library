@@ -168,6 +168,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
 
+      - name: Cleanup .yarnrc.yml changes before
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: |
+          git restore .yarnrc.yml
+
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
