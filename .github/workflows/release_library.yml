@@ -72,6 +72,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v3
@@ -92,7 +95,8 @@ jobs:
 
       - name: Install dependencies with Yarn-Berry
         if: inputs.PACKAGE_MANAGER == 'yarn-berry'
-        run: yarn install --immutable
+        run: |
+          yarn install --immutable
 
       - name: Install dependencies with Yarn
         if: inputs.PACKAGE_MANAGER == 'yarn'
@@ -165,6 +169,11 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY
         env:
           GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+
+      - name: Cleanup .yarnrc.yml changes before publish
+        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
+        run: |
+          git restore .yarnrc.yml
 
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
