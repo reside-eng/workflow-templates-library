@@ -11,10 +11,6 @@ on:
         default: 15
         required: false
         type: number
-      PACKAGE_MANAGER:
-        default: yarn-berry
-        required: false
-        type: string
       ENABLE_BUILDING:
         default: true
         required: false
@@ -55,6 +51,11 @@ on:
         default: 'SLACK_WEBHOOK_PLATFORM_PROD'
         required: false
         type: string
+      PACKAGE_MANAGER:
+        default: yarn-berry
+        required: false
+        type: string
+        description: 'Deprecated - Will be removed in a future version'
 
     secrets:
       NPM_READ_TOKEN:
@@ -95,7 +96,6 @@ jobs:
           cache: 'yarn'
 
       - name: Configure NPM auth token
-        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: |
           yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
 
@@ -106,12 +106,7 @@ jobs:
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
-        if: inputs.PACKAGE_MANAGER == 'yarn-berry'
         run: yarn install --immutable
-
-      - name: Install dependencies with Yarn
-        if: inputs.PACKAGE_MANAGER == 'yarn'
-        run: yarn install --frozen-lockfile
 
       - name: Verify lint
         run: yarn lint
