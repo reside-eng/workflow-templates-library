@@ -48,7 +48,7 @@ runs:
         fi
 
     - name: Comment preview links
-      uses: peter-evans/create-or-update-comment@v2.1.1
+      uses: peter-evans/create-or-update-comment@v3.1.0
       with:
         comment-id: ${{ steps.fc.outputs.comment-id }}
         issue-number: ${{ env.PR_NUM }}
