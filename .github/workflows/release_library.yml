@@ -19,6 +19,10 @@ on:
         default: true
         required: false
         type: boolean
+      ENABLE_COVERAGE:
+        default: true
+        required: false
+        type: boolean
       ENABLE_VISUAL_TESTING:
         default: false
         required: false
@@ -98,11 +102,15 @@ jobs:
           yarn install --immutable
 
       - name: Test
-        if: inputs.ENABLE_TESTING
-        run: yarn test:cov
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE == false
+        run: yarn test
 
+      - name: Test
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
+        run: yarn test:cov
+        
       - name: Upload coverage to Coveralls
-        if: inputs.ENABLE_TESTING
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         uses: coverallsapp/github-action@v2.2.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
