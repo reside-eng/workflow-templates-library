@@ -161,7 +161,7 @@ jobs:
 
       - name: Auth Cloud SDK
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
           project_id: 'reside-stage'
           credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
