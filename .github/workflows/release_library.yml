@@ -180,8 +180,8 @@ jobs:
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
-          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
-          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-graduate
+          echo lerna publish ${LERNA_DEFAULT_ARGS} --conventional-graduate
+          yarn lerna publish ${LERNA_DEFAULT_ARGS} --conventional-graduate
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
           LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch '*'
