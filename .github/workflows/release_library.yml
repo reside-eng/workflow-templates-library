@@ -68,6 +68,7 @@ on:
 
 env:
   NODE_VERSION: ${{ inputs.NODE_VERSION }}
+  LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch '*'
 
 jobs:
   release:
@@ -180,20 +181,18 @@ jobs:
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
-          echo lerna publish ${LERNA_DEFAULT_ARGS} --conventional-graduate
-          yarn lerna publish ${LERNA_DEFAULT_ARGS} --conventional-graduate
+          echo lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
+          yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch \'*\'
 
       - name: Publish to a prerelease dist-tag
         if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
-          echo lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
-          yarn lerna publish $LERNA_DEFAULT_ARGS --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+          echo lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
+          yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          LERNA_DEFAULT_ARGS: --exact --concurrency 1 --yes --conventional-commits --create-release github --allow-branch '*'
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
