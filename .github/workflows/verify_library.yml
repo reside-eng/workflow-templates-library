@@ -135,7 +135,7 @@ jobs:
         
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
-        uses: coverallsapp/github-action@v2.2.0
+        uses: coverallsapp/github-action@v2.2.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -199,11 +199,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3.5.2
+        uses: actions/checkout@v3.6.0
 
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
-      - uses: reside-eng/workflow-status-notification-action@v1.2.3
+      - uses: reside-eng/workflow-status-notification-action@v1.3.1
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
