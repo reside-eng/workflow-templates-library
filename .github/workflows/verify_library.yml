@@ -132,7 +132,7 @@ jobs:
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: yarn test:cov
-        
+
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         uses: coverallsapp/github-action@v2.2.0
@@ -191,18 +191,12 @@ jobs:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
 
-  notification:
-    if: always() && inputs.ENABLE_SLACK_NOTIFICATION
-    name: notification
-    needs: [verify]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3.5.2
-
+      - name: Get workflow conclusion
+        if: inputs.ENABLE_SLACK_NOTIFICATION
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
+      - name: Send Slack notification
+        if: inputs.ENABLE_SLACK_NOTIFICATION
       - uses: reside-eng/workflow-status-notification-action@v1.2.3
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
