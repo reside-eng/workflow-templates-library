@@ -212,13 +212,13 @@ jobs:
   finalize-workflow:
     if: always()
     name: finalize-workflow
-    needs: [verify]
+    needs: [verify, notification]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: set return status
         run: |
-          if [[ "${{ needs.job0.outputs.job-status }}" == "Success" ]]; then
+          if [[ "${{ needs.verify.outputs.job-status }}" == "Success" ]]; then
             exit 0
           else
             exit 1
