@@ -218,7 +218,7 @@ jobs:
     steps:
       - name: set return status
         run: |
-          if [[ "${{ needs.verify.outputs.job-status }}" == "Success" ]]; then
+          if [[ "${{ needs.verify.result }}" == "success" ]]; then
             exit 0
           else
             exit 1
