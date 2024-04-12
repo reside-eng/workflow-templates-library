@@ -191,14 +191,35 @@ jobs:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
 
-      - name: Get workflow conclusion
-        if: inputs.ENABLE_SLACK_NOTIFICATION
-        uses: technote-space/workflow-conclusion-action@v3.0.3
+  notification:
+    if: always() && inputs.ENABLE_SLACK_NOTIFICATION
+    name: notification
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3.5.2
 
-      - name: Send Slack notification
-        if: inputs.ENABLE_SLACK_NOTIFICATION
-        uses: reside-eng/workflow-status-notification-action@v1.2.3
+      - uses: technote-space/workflow-conclusion-action@v3.0.3
+
+      - uses: reside-eng/workflow-status-notification-action@v1.2.3
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  finalize-workflow:
+    if: always()
+    name: finalize-workflow
+    needs: [verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: set return status
+        run: |
+          if [[ "${{ needs.job0.outputs.job-status }}" == "Success" ]]; then
+            exit 0
+          else
+            exit 1
+          fi
