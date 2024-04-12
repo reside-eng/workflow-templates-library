@@ -193,11 +193,11 @@ jobs:
 
       - name: Get workflow conclusion
         if: inputs.ENABLE_SLACK_NOTIFICATION
-      - uses: technote-space/workflow-conclusion-action@v3.0.3
+        uses: technote-space/workflow-conclusion-action@v3.0.3
 
       - name: Send Slack notification
         if: inputs.ENABLE_SLACK_NOTIFICATION
-      - uses: reside-eng/workflow-status-notification-action@v1.2.3
+        uses: reside-eng/workflow-status-notification-action@v1.2.3
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
