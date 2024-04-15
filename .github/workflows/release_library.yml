@@ -142,6 +142,7 @@ jobs:
         uses: cycjimmy/semantic-release-action@v3
         id: semantic
         with:
+          # NOTE: ^19 is ESM and was causing a break
           semantic_version: ^18
           branches: |
             [
@@ -152,6 +153,10 @@ jobs:
               {name: 'beta', prerelease: true},
               {name: 'alpha', prerelease: true}
             ]
+          # Config override used disable features of @semantic-release/github causing rate limit
+          # @semantic-release/exec is installed internally
+          extends: |
+            @side/semantic-config-base
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
