@@ -138,7 +138,7 @@ jobs:
         uses: coverallsapp/github-action@v2.2.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_GIT_BRANCH: ${{ github.event_name == 'merge_group' && env.GITHUB_REF_NAME || env.GITHUB_HEAD_REF }}
+          git-branch: ${{ github.event_name == 'merge_group' && env.GITHUB_REF_NAME || env.GITHUB_HEAD_REF }}
 
       - name: Build app
         if: inputs.ENABLE_BUILDING
