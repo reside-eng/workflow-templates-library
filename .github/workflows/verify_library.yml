@@ -52,7 +52,7 @@ on:
         required: false
         type: boolean
       SLACK_NOTIFICATION_SECRET:
-        default: 'SLACK_WEBHOOK_PLATFORM_PROD'
+        default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
       PACKAGE_MANAGER:
@@ -68,6 +68,8 @@ on:
       SLACK_WEBHOOK_CORE_NON_PROD:
         required: false
       SLACK_WEBHOOK_PLATFORM_PROD:
+        required: false
+      SLACK_WEBHOOK_PLATFORM_NONPROD:
         required: false
       SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
         required: false
@@ -132,7 +134,7 @@ jobs:
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: yarn test:cov
-        
+
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         uses: coverallsapp/github-action@v2.2.3
