@@ -108,6 +108,9 @@ jobs:
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
+          env
+          temp_name=${GITHUB_REF_NAME#gh-readonly-queue/main/pr-}
+          echo $temp_name
 
       - name: Install dependencies with Yarn-Berry
         run: yarn install --immutable
@@ -132,7 +135,7 @@ jobs:
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: yarn test:cov
-        
+
       - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         uses: coverallsapp/github-action@v2.2.3
