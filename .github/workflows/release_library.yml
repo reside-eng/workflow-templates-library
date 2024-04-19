@@ -131,12 +131,6 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./docs-dist
 
-      - name: Percy Visual Testing
-        if: inputs.ENABLE_VISUAL_TESTING
-        env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-        run: yarn percy
-
       - name: Semantic Release
         if: inputs.IS_MONOREPO == false
         uses: cycjimmy/semantic-release-action@v3

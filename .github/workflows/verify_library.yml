@@ -179,13 +179,6 @@ jobs:
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
-      - name: Run Storybook and upload preview
-        if: inputs.ENABLE_VISUAL_TESTING
-        uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
-        id: storybook
-        with:
-          percy-token: ${{ secrets.PERCY_TOKEN }}
-
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
         uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
