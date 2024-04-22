@@ -92,26 +92,54 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
     steps:
+      - name: Prepare environment
+        id: prepare_env
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            echo -e "IN_MERGE_QUEUE<<EOF\ntrue\nEOF" >> $GITHUB_ENV
+            temp_name=${GITHUB_REF_NAME#gh-readonly-queue/main/pr-}
+            pr_id="${temp_name%-*}"
+            echo "PR_ID=${pr_id}" >> $GITHUB_ENV
+            echo "PR_ID=${pr_id}" >> $GITHUB_ENV
+          else
+            echo -e "IN_MERGE_QUEUE<<EOF\nfalse\nEOF" >> $GITHUB_ENV
+            echo "PR_ID=${{ github.event.pull_request.number }}" >> $GITHUB_ENV
+          fi
+
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+
+      - name: Check if PR already up-to-date
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            # Retrieve PR related branch
+            git fetch origin pull/$PR_ID/head:$PR_ID-pr-branch
+            if [[ $(git --no-pager diff $GITHUB_REF_NAME..$PR_ID-pr-branch) ]]; then
+                echo "PR is not up-to-date: Run MQ checks"
+                echo -e "PR_UPTODATE<<EOF\nfalse\nEOF" >> $GITHUB_ENV
+            else
+                echo "PR is up-to-date: Skip MQ checks"
+                echo -e "PR_UPTODATE<<EOF\ntrue\nEOF" >> $GITHUB_ENV
+            fi
+          else
+            echo "Not in Merge Queue"
+            echo -e "PR_UPTODATE<<EOF\nfalse\nEOF" >> $GITHUB_ENV
+          fi
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
-
-      - name: Configure NPM auth token
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
 
       - name: Configure Package Manager
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
+          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
 
-      - name: Install dependencies with Yarn-Berry
+      - name: Install dependencies
         run: yarn install --immutable
 
       - name: Verify lint
@@ -132,11 +160,11 @@ jobs:
         run: yarn test
 
       - name: Test
-        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         run: yarn test:cov
 
       - name: Upload coverage to Coveralls
-        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: coverallsapp/github-action@v2.2.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -158,50 +186,50 @@ jobs:
       #
       # TODO: [PLAT-2557] Replace with andresz1/size-limit-action once size-limit settings are in main (needed for diff)
       - name: Size Check
-        if: inputs.ENABLE_SIZE_LIMIT_CHECK
+        if: inputs.ENABLE_SIZE_LIMIT_CHECK && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         run: yarn size:check
 
       - name: Auth Cloud SDK
-        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
+        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: google-github-actions/auth@v1
         with:
           project_id: 'reside-stage'
           credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
 
       - name: Set up Cloud SDK
-        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
+        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: google-github-actions/setup-gcloud@v1
 
       - name: Run Playwright integration tests and upload preview
-        if: inputs.ENABLE_PLAYWRIGHT
+        if: inputs.ENABLE_PLAYWRIGHT && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1
         id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
-        if: inputs.ENABLE_VISUAL_TESTING
+        if: inputs.ENABLE_VISUAL_TESTING && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
         id: storybook
         with:
           percy-token: ${{ secrets.PERCY_TOKEN }}
 
       - name: Comment preview links
-        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
+        if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT && (env.IN_MERGE_QUEUE != 'true' || ( env.IN_MERGE_QUEUE == 'true' && env.PR_UPTODATE == 'false' ))
         uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
 
   notification:
-    if: always() && inputs.ENABLE_SLACK_NOTIFICATION
+    if: always() && inputs.ENABLE_SLACK_NOTIFICATION && github.event_name != 'merge_group'
     name: notification
     needs: [verify]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3.6.0
+        uses: actions/checkout@v4
 
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
