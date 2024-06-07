@@ -174,7 +174,7 @@ jobs:
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright@playright-font-issue
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1
         id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
@@ -188,7 +188,7 @@ jobs:
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@playright-font-issue
+        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}

@@ -20,13 +20,13 @@ runs:
       # so the file was downloaded and uploaded to side-plat-tools-public bucket
       run: |
         wget -O Inter.zip https://storage.googleapis.com/side-plat-tools-public/playwright-fonts/Inter.zip
-        echo "Inter Zip file downloaded, unzipping"
+        echo "::debug::Inter Zip file downloaded, unzipping"
         unzip -d Inter/ Inter.zip
-        echo "Inter font file unzipped, moving"
+        echo "::debug::Inter font file unzipped, moving"
         mv Inter /usr/share/fonts/
-        echo "Inter font file moved, building to cache"
+        echo "::debug::Inter font file moved, building to cache"
         fc-cache -fv
-        echo "Inter font built to cache"
+        echo "::debug::Inter font built to cache"
       shell: bash
 
     - name: Run integration tests
