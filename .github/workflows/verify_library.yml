@@ -174,7 +174,7 @@ jobs:
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@playright-font-issue
         id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
