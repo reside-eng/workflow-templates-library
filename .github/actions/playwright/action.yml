@@ -17,11 +17,12 @@ runs:
 
     - name: Install Google Fonts
       run: |
-        wget -O Inter.zip https://fonts.google.com/download?family=Inter
+        echo "Downloading Inter font zip file"
+        wget -O $GITHUB_WORKSPACE/Inter.zip https://fonts.google.com/download?family=Inter
         echo "Inter Zip file downloaded, unzipping"
-        unzip -d Inter/ Inter.zip
+        unzip -d $GITHUB_WORKSPACE/Inter/ $GITHUB_WORKSPACE/Inter.zip
         echo "Inter font file unzipped, moving"
-        mv Inter /usr/share/fonts/
+        mv $GITHUB_WORKSPACE/Inter /usr/share/fonts/
         echo "Inter font file moved, building to cache"
         fc-cache -fv
         echo "Inter font built to cache"
