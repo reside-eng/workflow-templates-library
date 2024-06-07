@@ -19,8 +19,14 @@ runs:
       # NOTE: Invalid zip file was being downloaded through wget -O Inter.zip https://fonts.google.com/download?family=Inter
       # so the file was downloaded and uploaded to side-plat-tools-public bucket
       run: |
-        wget -O Inter.zip https://storage.googleapis.com/side-plat-tools-public/playwright-fonts/Inter.zip
-        echo "::debug::Inter Zip file downloaded, unzipping"
+        if [ -f Inter.zip ]; then
+          echo "::debug::Inter Zip found in repo"
+        else
+          echo "::debug::Inter Zip file not found in repo, downloading"
+          wget -O Inter.zip https://storage.googleapis.com/side-plat-tools-public/playwright-fonts/Inter.zip
+          echo "::debug::Inter Zip file downloaded"
+        fi
+        echo "::debug::Unzipping Inter.zip"
         unzip -d Inter/ Inter.zip
         echo "::debug::Inter font file unzipped, moving"
         mv Inter /usr/share/fonts/
