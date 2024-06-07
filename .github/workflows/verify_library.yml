@@ -188,7 +188,7 @@ jobs:
 
       - name: Comment preview links
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@playright-font-issue
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
