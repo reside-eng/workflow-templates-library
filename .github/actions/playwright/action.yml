@@ -16,11 +16,17 @@ runs:
       shell: bash
 
     - name: Install Google Fonts
+      # NOTE: Invalid zip file was being downloaded through wget -O Inter.zip https://fonts.google.com/download?family=Inter
+      # so the file was downloaded and uploaded to side-plat-tools-public bucket
       run: |
-        wget -O Inter.zip https://fonts.google.com/download?family=Inter
+        wget -O Inter.zip https://storage.googleapis.com/side-plat-tools-public/playwright-fonts/Inter.zip
+        echo "::debug::Inter Zip file downloaded, unzipping"
         unzip -d Inter/ Inter.zip
+        echo "::debug::Inter font file unzipped, moving"
         mv Inter /usr/share/fonts/
+        echo "::debug::Inter font file moved, building to cache"
         fc-cache -fv
+        echo "::debug::Inter font built to cache"
       shell: bash
 
     - name: Run integration tests
