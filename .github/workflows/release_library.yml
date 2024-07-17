@@ -99,8 +99,14 @@ jobs:
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
+        id: install
         run: |
-          yarn install --immutable
+          yarn install --immutable --inline-builds
+
+      - name: Check install debug output if exists
+        if: ${{ failure() && steps.install.conclusion == 'failure' }}
+        run: |
+          cat /tmp/xfs-*/build.log || true
 
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE == false
