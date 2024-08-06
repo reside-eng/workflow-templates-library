@@ -180,7 +180,8 @@ jobs:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
-        if: inputs.ENABLE_VISUAL_TESTING
+        # Skip running of Percy through storybook if PR is dependecy updates or if PR is draft
+        if: inputs.ENABLE_VISUAL_TESTING && github.actor != 'renovate[bot]' && (github.event_name == 'merge_group' || github.event.pull_request.draft != true)
         uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
         id: storybook
         with:
