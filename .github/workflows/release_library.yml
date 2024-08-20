@@ -88,17 +88,9 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Configure NPM auth token
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
-
-      - name: Configure Package Manager
-        run: |
-          echo Configuring NPM_TOKEN globally for .npmrc
-          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_PUBLISH_TOKEN }}
-          npm whoami
-
       - name: Install dependencies with Yarn-Berry
+        env:
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
         run: |
           yarn install --immutable
 
