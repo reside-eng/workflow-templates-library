@@ -75,9 +75,6 @@ jobs:
     name: release
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
-    env:
-      YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-      NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -90,6 +87,16 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
+
+      - name: Configure NPM auth token
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
+
+      - name: Configure Package Manager
+        run: |
+          echo Configuring NPM_TOKEN globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_PUBLISH_TOKEN }}
+          npm whoami
 
       - name: Install dependencies with Yarn-Berry
         run: |
@@ -171,6 +178,10 @@ jobs:
           git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/$GITHUB_REPOSITORY
         env:
           GITHUB_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+
+      - name: Cleanup .yarnrc.yml changes before publish
+        run: |
+          git restore .yarnrc.yml
 
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
