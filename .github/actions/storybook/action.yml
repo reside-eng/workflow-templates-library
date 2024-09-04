@@ -4,6 +4,9 @@ inputs:
   percy-token:
     description: 'Token for Percy'
     required: true
+  skip-percy:
+    description: 'Whether or not to skip Percy - if skipped build still runs and preview url is still generated'
+    required: false
 outputs:
   preview-url:
     description: 'URL of Storybook Preview'
@@ -16,6 +19,7 @@ runs:
       shell: bash
 
     - name: Percy Visual Testing
+      if: inputs.skip-percy != 'true'
       env:
         PERCY_TOKEN: ${{ inputs.percy-token }}
       run: yarn percy
