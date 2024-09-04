@@ -172,12 +172,13 @@ jobs:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
-        # Skip running of Percy through storybook if PR is dependecy updates or if PR is draft
-        if: inputs.ENABLE_VISUAL_TESTING && github.actor != 'renovate[bot]' && (github.event_name == 'merge_group' || github.event.pull_request.draft != true)
+        if: inputs.ENABLE_VISUAL_TESTING
         uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
         id: storybook
         with:
           percy-token: ${{ secrets.PERCY_TOKEN }}
+          # Skip running of Percy through storybook if PR is dependecy updates or if PR is draft
+          skip-percy: ${{ github.actor == 'renovate[bot]' || github.event.pull_request.draft == true }}
 
       - name: Comment preview links
         if: steps.storybook.outputs.preview-url != '' || steps.playwright.outputs.preview-url != ''
