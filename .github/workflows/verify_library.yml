@@ -173,7 +173,7 @@ jobs:
 
       - name: Run Storybook and upload preview
         if: inputs.ENABLE_VISUAL_TESTING
-        uses: reside-eng/workflow-templates-library/.github/actions/storybook@skip-percy-for-draft
+        uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
         id: storybook
         with:
           percy-token: ${{ secrets.PERCY_TOKEN }}

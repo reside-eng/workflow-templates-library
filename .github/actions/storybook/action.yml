@@ -7,6 +7,7 @@ inputs:
   skip-percy:
     description: 'Whether or not to skip Percy - if skipped build still runs and preview url is still generated'
     required: false
+    default: 'false'
 outputs:
   preview-url:
     description: 'URL of Storybook Preview'
