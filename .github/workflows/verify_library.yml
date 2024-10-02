@@ -132,6 +132,9 @@ jobs:
         uses: coverallsapp/github-action@v2.3.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # temporary disable fail on error due to bug in the action
+          # ref: https://github.com/coverallsapp/github-action/issues/224
+          fail-on-error: false
 
       - name: Build app
         if: inputs.ENABLE_BUILDING
