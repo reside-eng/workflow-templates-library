@@ -55,11 +55,6 @@ on:
         default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
-      PACKAGE_MANAGER:
-        default: yarn-berry
-        required: false
-        type: string
-        description: 'Deprecated - Will be removed in a future version'
 
     secrets:
       NPM_READ_TOKEN:
