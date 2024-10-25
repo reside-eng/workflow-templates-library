@@ -14,7 +14,6 @@ Templates for Side librairies github actions
 | ---------------------- | ------------------------------------------------ | --------- | -------------------- |
 | NODE_VERSION | string | 18.x | `false` |
 | TIMEOUT | number | 15 | `false` |
-| PACKAGE_MANAGER | string | yarn-berry | `false` |
 | ENABLE_TYPES_CHECK | boolean | false | `false` |
 | ENABLE_FORMAT_CHECK | boolean | false | `false` |
 | ENABLE_SIZE_LIMIT_CHECK | boolean | false | `false` |
@@ -43,7 +42,6 @@ Templates for Side librairies github actions
 | ---------------------- | ------------------------------------------------ | --------- | -------------------- |
 | NODE_VERSION | string | 18.x | `false` |
 | TIMEOUT | number | 15 | `false` |
-| PACKAGE_MANAGER | string | yarn-berry | `false` |
 | ENABLE_TYPES_CHECK | boolean | false | `false` |
 | ENABLE_FORMAT_CHECK | boolean | false | `false` |
 | ENABLE_SIZE_LIMIT_CHECK | boolean | false | `false` |
