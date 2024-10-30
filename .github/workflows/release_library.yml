@@ -36,20 +36,13 @@ on:
         required: false
         type: boolean
       SLACK_NOTIFICATION_SECRET:
-        default: 'SLACK_WEBHOOK_PLATFORM_PROD'
+        default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
 
     secrets:
       NPM_PUBLISH_TOKEN:
         required: true
-      #Note: Due to some github actions limitations all the slack webhook secrets that could be used by the librairies need to be added here with required: false
-      SLACK_WEBHOOK_CORE_NON_PROD:
-        required: false
-      SLACK_WEBHOOK_PLATFORM_PROD:
-        required: false
-      SLACK_WEBHOOK_PLATFORM_SERVICES_NONPROD:
-        required: false
       #Secret needed when ENABLE_VISUAL_TESTING = true:
       # - SIDE_CI_APPLICATION_ID
       # - SIDE_CI_APPLICATION_PRIVATE_KEY
