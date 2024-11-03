@@ -171,6 +171,17 @@ jobs:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
 
+  check-dependencies:
+    name: check-dependencies
+    uses: reside-eng/workflow-templates/.github/workflows/check-nodejs-dependencies.yml@v10
+    with:
+      WORKFLOW_NAME: check-dependencies
+      ENV: stage
+      GIT_REF: ''
+    secrets:
+      NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+      CI_SERVICE_ACCOUNT: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
     name: notification
