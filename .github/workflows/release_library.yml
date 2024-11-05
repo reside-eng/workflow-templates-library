@@ -43,6 +43,8 @@ on:
     secrets:
       NPM_PUBLISH_TOKEN:
         required: true
+      CI_SERVICE_ACCOUNT:
+        required: true
       #Secret needed when ENABLE_VISUAL_TESTING = true:
       # - SIDE_CI_APPLICATION_ID
       # - SIDE_CI_APPLICATION_PRIVATE_KEY
@@ -186,6 +188,17 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+
+  check-dependencies:
+    name: check-dependencies
+    uses: reside-eng/workflow-templates/.github/workflows/check-nodejs-dependencies.yml@v10
+    with:
+      WORKFLOW_NAME: check-dependencies
+      ENV: stage
+      GIT_REF: ''
+    secrets:
+      NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+      CI_SERVICE_ACCOUNT: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
