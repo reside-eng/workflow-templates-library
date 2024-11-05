@@ -43,6 +43,8 @@ on:
     secrets:
       NPM_PUBLISH_TOKEN:
         required: true
+      NPM_READ_TOKEN:
+        required: true
       CI_SERVICE_ACCOUNT:
         required: true
       #Secret needed when ENABLE_VISUAL_TESTING = true:
