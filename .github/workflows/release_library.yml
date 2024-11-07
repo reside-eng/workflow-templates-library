@@ -191,6 +191,17 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
 
+  check-dependencies:
+    name: check-dependencies
+    uses: ./.github/workflows/check-nodejs-dependencies.yml
+    with:
+      WORKFLOW_NAME: check-dependencies
+      ENV: stage
+      GIT_REF: ''
+    secrets:
+      NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+      CI_SERVICE_ACCOUNT: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
     name: notification
