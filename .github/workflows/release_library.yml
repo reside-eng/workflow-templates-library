@@ -193,7 +193,7 @@ jobs:
 
   check-dependencies:
     name: check-dependencies
-    uses: reside-eng/workflow-templates/.github/workflows/check-nodejs-dependencies.yml@v10
+    uses: ./.github/workflows/check-nodejs-dependencies.yml
     with:
       WORKFLOW_NAME: check-dependencies
       ENV: stage

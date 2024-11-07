@@ -1,0 +1,100 @@
+name: This is for dependencies for Nodejs
+
+on:
+  workflow_call:
+    inputs:
+      WORKFLOW_NAME:
+        required: true
+        type: string
+      ENV:
+        required: true
+        type: string
+      # The git ref used for checking out code
+      GIT_REF:
+        required: true
+        type: string
+      # bucket name
+      BUCKET_NAME:
+        default: 'reside-stage.appspot.com'
+        required: false
+        type: string
+      STATS_FOLDER:
+        default: 'dependency-stats'
+        required: false
+        type: string
+      # Default timeout for the job
+      TIMEOUT:
+        default: 30
+        required: false
+        type: number
+    secrets:
+      CI_SERVICE_ACCOUNT:
+        required: true
+      NPM_READ_TOKEN:
+        required: true
+
+jobs:
+  check-dependencies:
+    name: ${{ inputs.WORKFLOW_NAME }}
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    runs-on: ubuntu-latest
+    env:
+      ENV: ${{ inputs.ENV }}
+      SERVICE_NAME: ${{ github.event.repository.name }}
+      GIT_REF: ${{ inputs.GIT_REF }}
+    steps:
+      - name: Format env for github variable
+        run: |
+          env_upper=$(echo "$ENV" | tr a-z A-Z | tr - _)
+          echo "ENV_UPPER=$env_upper" >> $GITHUB_ENV
+
+      - name: Set GCLOUD_PROJECT
+        run: |
+          gcloud_project=${{ vars[format('{0}_PROJECT', env.ENV_UPPER)] }}
+          echo "GCLOUD_PROJECT=$gcloud_project" >> $GITHUB_ENV
+
+      - name: Preparation for NodeJS workflow (checkout, node, npmAuth, cache...)
+        id: prepare-node
+        uses: reside-eng/workflow-templates/.github/actions/node-prepare@v10
+        with:
+          NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+          RUN_INSTALL: true
+
+      - name: Check top level outdated
+        id: dep-stats
+        uses: reside-eng/npm-dependency-stats-action@v3
+        with:
+          output-file: ./dep-stats.json
+
+      - name: Message outdated dependencies
+        run: |
+          percents=${{ fromJSON(steps.dep-stats.outputs.percents) }}
+          counts=${{ fromJSON(steps.dep-stats.outputs.counts) }}
+          totalDeps=${{ fromJSON(steps.dep-stats.outputs.counts).total }}
+          echo "Total Dependencies: $counts.total"
+          echo "Up to date: ${{ fromJSON(steps.dep-stats.outputs.counts).upToDate }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).upToDate }} %)"
+          echo "Major behind: ${{ fromJSON(steps.dep-stats.outputs.counts).major }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).major }} %)"
+          echo "Minor behind: ${{ fromJSON(steps.dep-stats.outputs.counts).minor }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).minor }} %)"
+          echo "Patch behind: ${{ fromJSON(steps.dep-stats.outputs.counts).patch }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).patch }} %)"
+
+      - name: Authenticate with Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.GCLOUD_PROJECT }}
+          credentials_json: ${{ secrets.CI_SERVICE_ACCOUNT }}
+
+      # setup-gcloud without components is required to have the proper authentication for gsutil commands
+      - name: Set up Google Cloud CLI
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: ''
+
+      - name: Upload dependency stats to Cloud Storage
+        env:
+          BUCKET: ${{ inputs.BUCKET_NAME }}
+          STATS_FOLDER: ${{ inputs.STATS_FOLDER }}
+        run: |
+          echo "Uploading results to Google Cloud Storage\n"
+          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
+          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
+          echo "\nSuccessfully uploaded dependency stats to Cloud Storage"
