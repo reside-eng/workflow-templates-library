@@ -56,6 +56,9 @@ jobs:
         run: |
           gcloud_project=${{ vars[format('{0}_PROJECT', env.ENV_UPPER)] }}
           echo "GCLOUD_PROJECT=$gcloud_project" >> $GITHUB_ENV
+      
+      - name: Checkout code
+        uses: actions/checkout@v4
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
