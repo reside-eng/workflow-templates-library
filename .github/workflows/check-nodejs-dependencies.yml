@@ -27,6 +27,10 @@ on:
         default: 30
         required: false
         type: number
+      NODE_VERSION:
+        default: '18.x'
+        required: false
+        type: string
     secrets:
       DEPENDENCY_STATS_SERVICE_ACCOUNT:
         required: true
@@ -53,12 +57,25 @@ jobs:
           gcloud_project=${{ vars[format('{0}_PROJECT', env.ENV_UPPER)] }}
           echo "GCLOUD_PROJECT=$gcloud_project" >> $GITHUB_ENV
 
-      - name: Preparation for NodeJS workflow (checkout, node, npmAuth, cache...)
-        id: prepare-node
-        uses: reside-eng/workflow-templates/.github/actions/node-prepare@v10
+      - name: Use Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
-          RUN_INSTALL: true
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Configure NPM auth token
+        run: |
+          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
+
+      - name: Configure Package Manager
+        run: |
+          echo Configuring NPM_TOKEN globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
+          npm whoami
+
+      - name: Install dependencies with Yarn-Berry
+        run: |
+          yarn install --immutable
 
       - name: Check top level outdated
         id: dep-stats
