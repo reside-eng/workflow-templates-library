@@ -45,7 +45,7 @@ on:
         required: true
       NPM_READ_TOKEN:
         required: true
-      CI_SERVICE_ACCOUNT:
+      DEPENDENCY_STATS_SERVICE_ACCOUNT:
         required: true
       #Secret needed when ENABLE_VISUAL_TESTING = true:
       # - SIDE_CI_APPLICATION_ID
@@ -200,7 +200,7 @@ jobs:
       GIT_REF: ''
     secrets:
       NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
-      CI_SERVICE_ACCOUNT: ${{ secrets.CI_SERVICE_ACCOUNT }}
+      DEPENDENCY_STATS_SERVICE_ACCOUNT: ${{ secrets.DEPENDENCY_STATS_SERVICE_ACCOUNT }}
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
