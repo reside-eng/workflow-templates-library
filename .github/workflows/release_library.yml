@@ -196,7 +196,6 @@ jobs:
     uses: ./.github/workflows/check-nodejs-dependencies.yml
     with:
       WORKFLOW_NAME: check-dependencies
-      ENV: stage
       GIT_REF: ''
       NODE_VERSION: ${{ inputs.NODE_VERSION }}
     secrets:
