@@ -6,9 +6,6 @@ on:
       WORKFLOW_NAME:
         required: true
         type: string
-      ENV:
-        required: true
-        type: string
       # The git ref used for checking out code
       GIT_REF:
         required: true
@@ -43,20 +40,9 @@ jobs:
     timeout-minutes: ${{ inputs.TIMEOUT }}
     runs-on: ubuntu-latest
     env:
-      ENV: ${{ inputs.ENV }}
       SERVICE_NAME: ${{ github.event.repository.name }}
       GIT_REF: ${{ inputs.GIT_REF }}
     steps:
-      - name: Format env for github variable
-        run: |
-          env_upper=$(echo "$ENV" | tr a-z A-Z | tr - _)
-          echo "ENV_UPPER=$env_upper" >> $GITHUB_ENV
-
-      - name: Set GCLOUD_PROJECT
-        run: |
-          gcloud_project=${{ vars[format('{0}_PROJECT', env.ENV_UPPER)] }}
-          echo "GCLOUD_PROJECT=$gcloud_project" >> $GITHUB_ENV
-      
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -100,7 +86,7 @@ jobs:
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v2
         with:
-          project_id: ${{ env.GCLOUD_PROJECT }}
+          project_id: reside-stage
           credentials_json: ${{ secrets.DEPENDENCY_STATS_SERVICE_ACCOUNT }}
 
       # setup-gcloud without components is required to have the proper authentication for gsutil commands
