@@ -149,6 +149,9 @@ jobs:
           # @semantic-release/exec is installed internally
           extends: |
             @side/semantic-config-base
+          # Sticky version until issue resolved. ref: https://github.com/semantic-release/semantic-release/issues/2922
+          extra_plugins: |
+            conventional-changelog-conventionalcommits@6
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
