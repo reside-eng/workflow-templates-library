@@ -124,7 +124,7 @@ jobs:
           publish_dir: ./docs-dist
 
       - name: Percy Visual Testing
-        if: inputs.ENABLE_VISUAL_TESTING
+        if: inputs.ENABLE_VISUAL_TESTING && github.actor != 'renovate[bot]'
         env:
           PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
         run: yarn percy
