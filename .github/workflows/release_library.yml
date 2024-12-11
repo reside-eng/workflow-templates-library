@@ -122,6 +122,11 @@ jobs:
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: |
           coverage_summary="./coverage/coverage-summary.json"
+
+          if [ ! -f "$coverage_summary" ]; then
+              npx nyc report --reporter=json-summary -t coverage
+          fi
+          
           bucket=reside-stage-plat-tools
           summaryFolder=coverage-reporting/summary
 
