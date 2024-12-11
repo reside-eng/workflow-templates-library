@@ -29,7 +29,7 @@ on:
         required: false
         type: string
     secrets:
-      LIBRARY_CI_SERVICE_ACCOUNT:
+      DEPENDENCY_STATS_SERVICE_ACCOUNT:
         required: true
       NPM_READ_TOKEN:
         required: true
@@ -87,7 +87,7 @@ jobs:
         uses: google-github-actions/auth@v2
         with:
           project_id: reside-stage
-          credentials_json: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
+          credentials_json: ${{ secrets.DEPENDENCY_STATS_SERVICE_ACCOUNT }}
 
       # setup-gcloud without components is required to have the proper authentication for gsutil commands
       - name: Set up Google Cloud CLI

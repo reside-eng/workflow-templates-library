@@ -45,7 +45,7 @@ on:
         required: true
       NPM_READ_TOKEN:
         required: true
-      LIBRARY_CI_SERVICE_ACCOUNT:
+      DEPENDENCY_STATS_SERVICE_ACCOUNT:
         required: true
       #Secret needed when ENABLE_VISUAL_TESTING = true:
       # - SIDE_CI_APPLICATION_ID
@@ -67,8 +67,6 @@ jobs:
     name: release
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
-    env:
-      SERVICE_NAME: ${{ github.event.repository.name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -104,32 +102,11 @@ jobs:
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: yarn test:cov
 
-      - name: Authenticate with Google Cloud
+      - name: Upload coverage to Coveralls
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
-        uses: google-github-actions/auth@v2
+        uses: coverallsapp/github-action@v2.3.4
         with:
-          project_id: reside-stage
-          credentials_json: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
-
-      # setup-gcloud without components is required to have the proper authentication for gsutil commands
-      - name: Set up Google Cloud CLI
-        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          install_components: ''
-
-      - name: Upload coverage summary
-        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
-        run: |
-          npx nyc report --reporter=json-summary -t coverage
-
-          coverage_summary="./coverage/coverage-summary.json"
-          bucket=reside-stage-plat-tools
-          summaryFolder=coverage-reporting/summary
-
-          gsutil -m -q cp $coverage_summary gs://$bucket/$summaryFolder/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
-          gsutil -m -q cp $coverage_summary gs://$bucket/$summaryFolder/$SERVICE_NAME/latest.json
-          echo "Coverage summary file uploaded successfully"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app
         if: inputs.ENABLE_BUILDING
@@ -223,7 +200,7 @@ jobs:
       NODE_VERSION: ${{ inputs.NODE_VERSION }}
     secrets:
       NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
-      LIBRARY_CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
+      DEPENDENCY_STATS_SERVICE_ACCOUNT: ${{ secrets.DEPENDENCY_STATS_SERVICE_ACCOUNT }}
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
