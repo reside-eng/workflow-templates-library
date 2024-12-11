@@ -111,6 +111,12 @@ jobs:
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: yarn test:cov
 
+      - name: Upload coverage to Coveralls
+        if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
+        uses: coverallsapp/github-action@v2.3.4
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build app
         if: inputs.ENABLE_BUILDING
         run: yarn build
