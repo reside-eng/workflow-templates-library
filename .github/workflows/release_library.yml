@@ -121,8 +121,6 @@ jobs:
       - name: Upload coverage summary
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
         run: |
-          npx nyc report --reporter=json-summary -t coverage
-
           coverage_summary="./coverage/coverage-summary.json"
           bucket=reside-stage-plat-tools
           summaryFolder=coverage-reporting/summary
