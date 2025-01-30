@@ -223,6 +223,10 @@ jobs:
   check-dependencies:
     name: check-dependencies
     uses: ./.github/workflows/check-nodejs-dependencies.yml
+    # Note: check-dependencies is failing for pantry due to "TypeError: Invalid Version: undefined"
+    # We temporarily disable check-dependencies for pantry repo until it has been fixed
+    # https://residenetwork.atlassian.net/browse/PLAT-8883
+    if: ${{ github.event.repository.name != 'pantry' }}
     with:
       WORKFLOW_NAME: check-dependencies
       GIT_REF: ''
