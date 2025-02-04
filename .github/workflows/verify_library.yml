@@ -155,8 +155,8 @@ jobs:
         id: storybook
         with:
           percy-token: ${{ secrets.PERCY_TOKEN }}
-          # Skip running of Percy through storybook if PR is dependecy updates or if PR is draft
-          skip-percy: ${{ github.actor == 'renovate[bot]' || github.event.pull_request.draft == true }}
+          # Skip running of Percy through storybook if PR is draft
+          skip-percy: ${{ github.event.pull_request.draft == true }}
 
       - name: Comment preview links
         if: steps.storybook.outputs.preview-url != '' || steps.playwright.outputs.preview-url != ''
