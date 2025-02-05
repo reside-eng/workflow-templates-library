@@ -220,6 +220,14 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
 
+      - name: CI Analytics
+        if: always()
+        continue-on-error: true
+        uses: reside-eng/workflow-templates/.github/actions/ci-analytics@v10
+        with:
+          RESULT: ${{ job.status }}
+          CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
+
   check-dependencies:
     name: check-dependencies
     uses: ./.github/workflows/check-nodejs-dependencies.yml
