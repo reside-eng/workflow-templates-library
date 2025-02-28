@@ -108,7 +108,7 @@ jobs:
       - name: CI Analytics
         if: always()
         continue-on-error: true
-        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        uses: reside-eng/workflow-templates/.github/actions/ci-analytics@v10
         with:
           RESULT: ${{ job.status }}
           CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
