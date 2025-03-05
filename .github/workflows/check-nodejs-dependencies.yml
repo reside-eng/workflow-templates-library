@@ -104,3 +104,11 @@ jobs:
           gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
           gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
           echo "\nSuccessfully uploaded dependency stats to Cloud Storage"
+
+      - name: CI Analytics
+        if: always()
+        continue-on-error: true
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        with:
+          RESULT: ${{ job.status }}
+          CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}

@@ -66,6 +66,8 @@ on:
         required: false
       PERCY_TOKEN:
         required: false
+      LIBRARY_CI_SERVICE_ACCOUNT:
+        required: true
 
 env:
   NODE_VERSION: ${{ inputs.NODE_VERSION }}
@@ -164,6 +166,14 @@ jobs:
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
+
+      - name: CI Analytics
+        if: always()
+        continue-on-error: true
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        with:
+          RESULT: ${{ job.status }}
+          CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
 
   notification:
     if: always() && inputs.ENABLE_SLACK_NOTIFICATION
