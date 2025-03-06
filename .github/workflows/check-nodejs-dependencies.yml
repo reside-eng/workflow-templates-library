@@ -72,7 +72,7 @@ jobs:
 
       - name: Check top level outdated
         id: dep-stats
-        uses: reside-eng/npm-dependency-stats-action@v3
+        uses: reside-eng/npm-dependency-stats-action@PLAT-8693-2
         with:
           output-file: ./dep-stats.json
           is-monorepo: ${{ inputs.IS_MONOREPO }}
