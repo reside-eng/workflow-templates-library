@@ -47,9 +47,12 @@ runs:
         # TODO: We should understand why it has been failing for some of our repo while it shouldn't have according to the auth action implementation. If we're able to, let's re-enable credentials cleanup as a good practice.
         cleanup_credentials: false
 
-    - uses: reside-eng/workflow-ci-analytics-action@v0.1.7
+    - uses: reside-eng/workflow-ci-analytics-action@v1
       if: always()
       with:
+        project_id: side-dw
+        dataset: github
+        table: ci_analytics
         matrix_name: ${{ inputs.MATRIX_NAME }}
         matrix_value: ${{ inputs.MATRIX_VALUE }}
         result: ${{ inputs.RESULT }}
