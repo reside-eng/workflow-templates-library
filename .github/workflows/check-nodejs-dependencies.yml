@@ -56,19 +56,17 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Configure NPM auth token
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
-
       - name: Configure Package Manager
+      # NOTE: Used for npm outdated (run internally in reside-eng/npm-dependency-stats-action)
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
-        run: |
-          yarn install --immutable
+        env:
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+        run: yarn install --immutable
 
       - name: Check top level outdated
         id: dep-stats
@@ -98,7 +96,6 @@ jobs:
           echo "Uploading results to Google Cloud Storage"
           if [ "$IS_MONOREPO" = "true" ]; then
             echo "Repo is monorepo, uploading dep stats for each package"
-            ls ./dep-stats
             for d in ./dep-stats/*; do
               folder=$(basename $d)
               gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/$(date +%Y-%m-%d_%H-%M-%S).json
