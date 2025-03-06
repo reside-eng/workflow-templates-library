@@ -31,6 +31,10 @@ on:
         default: false
         required: false
         type: boolean
+      SKIP_DEPENDENCIES_CHECK:
+        default: false
+        required: false
+        type: boolean
       ENABLE_SLACK_NOTIFICATION:
         default: true
         required: false
@@ -223,14 +227,12 @@ jobs:
   check-dependencies:
     name: check-dependencies
     uses: ./.github/workflows/check-nodejs-dependencies.yml
-    # Note: check-dependencies is failing for pantry due to "TypeError: Invalid Version: undefined"
-    # We temporarily disable check-dependencies for pantry repo until it has been fixed
-    # https://residenetwork.atlassian.net/browse/PLAT-8883
-    if: ${{ github.event.repository.name != 'pantry' }}
+    if: inputs.SKIP_DEPENDENCIES_CHECK != true
     with:
       WORKFLOW_NAME: check-dependencies
       GIT_REF: ''
       NODE_VERSION: ${{ inputs.NODE_VERSION }}
+      IS_MONOREPO: ${{ inputs.IS_MONOREPO }}
     secrets:
       NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
       LIBRARY_CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
