@@ -28,6 +28,10 @@ on:
         default: '18.x'
         required: false
         type: string
+      IS_MONOREPO:
+        default: false
+        required: false
+        type: boolean
     secrets:
       LIBRARY_CI_SERVICE_ACCOUNT:
         required: true
@@ -71,17 +75,7 @@ jobs:
         uses: reside-eng/npm-dependency-stats-action@v3
         with:
           output-file: ./dep-stats.json
-
-      - name: Message outdated dependencies
-        run: |
-          percents=${{ fromJSON(steps.dep-stats.outputs.percents) }}
-          counts=${{ fromJSON(steps.dep-stats.outputs.counts) }}
-          totalDeps=${{ fromJSON(steps.dep-stats.outputs.counts).total }}
-          echo "Total Dependencies: $counts.total"
-          echo "Up to date: ${{ fromJSON(steps.dep-stats.outputs.counts).upToDate }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).upToDate }} %)"
-          echo "Major behind: ${{ fromJSON(steps.dep-stats.outputs.counts).major }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).major }} %)"
-          echo "Minor behind: ${{ fromJSON(steps.dep-stats.outputs.counts).minor }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).minor }} %)"
-          echo "Patch behind: ${{ fromJSON(steps.dep-stats.outputs.counts).patch }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).patch }} %)"
+          is-monorepo: ${{ inputs.IS_MONOREPO }}
 
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v2
@@ -99,8 +93,18 @@ jobs:
         env:
           BUCKET: ${{ inputs.BUCKET_NAME }}
           STATS_FOLDER: ${{ inputs.STATS_FOLDER }}
+          IS_MONOREPO: ${{ inputs.IS_MONOREPO }}
         run: |
           echo "Uploading results to Google Cloud Storage\n"
-          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
-          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
+          if [ "$IS_MONOREPO" = "true" ]; then
+            echo "Repo is monorepo, uploading dep stats for each package"
+            for d in 'dep-stats' ; do
+              echo "Uploading dep stats for $d"
+              gsutil -m -q cp ./$d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$d/$(date +%Y-%m-%d_%H-%M-%S).json
+              gsutil -m -q cp ./$d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$d/latest.json
+            done
+          else
+            gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
+            gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
+          fi
           echo "\nSuccessfully uploaded dependency stats to Cloud Storage"

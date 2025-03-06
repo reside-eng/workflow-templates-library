@@ -231,6 +231,7 @@ jobs:
       WORKFLOW_NAME: check-dependencies
       GIT_REF: ''
       NODE_VERSION: ${{ inputs.NODE_VERSION }}
+      IS_MONOREPO: ${{ inputs.IS_MONOREPO }}
     secrets:
       NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
       LIBRARY_CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
