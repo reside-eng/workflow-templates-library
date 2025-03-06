@@ -101,7 +101,6 @@ jobs:
             ls ./dep-stats
             for d in ./dep-stats/*; do
               folder=$(basename $d)
-              echo "Uploading dep stats for $d in folder $folder"
               gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/$(date +%Y-%m-%d_%H-%M-%S).json
               gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/latest.json
             done
@@ -109,4 +108,4 @@ jobs:
             gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
             gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
           fi
-          echo "\nSuccessfully uploaded dependency stats to Cloud Storage"
+          echo "Successfully uploaded dependency stats to Cloud Storage"
