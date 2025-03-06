@@ -98,9 +98,10 @@ jobs:
           echo "Uploading results to Google Cloud Storage\n"
           if [ "$IS_MONOREPO" = "true" ]; then
             echo "Repo is monorepo, uploading dep stats for each package"
-            for d in ./dep-stats/* ; do
+            ls dep-stats
+            for d in dep-stats/*; do
               folder=$(basename $d)
-              echo "Uploading dep stats for $d"
+              echo "Uploading dep stats for $d in folder $folder"
               gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/$(date +%Y-%m-%d_%H-%M-%S).json
               gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/latest.json
             done
