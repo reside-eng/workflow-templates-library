@@ -31,8 +31,8 @@ on:
         default: false
         required: false
         type: boolean
-      SKIP_DEPENDENCIES_CHECK:
-        default: false
+      ENABLE_DEPENDENCIES_CHECK:
+        default: true
         required: false
         type: boolean
       ENABLE_SLACK_NOTIFICATION:
@@ -236,7 +236,7 @@ jobs:
   check-dependencies:
     name: check-dependencies
     uses: ./.github/workflows/check-nodejs-dependencies.yml
-    if: inputs.SKIP_DEPENDENCIES_CHECK != true
+    if: inputs.ENABLE_DEPENDENCIES_CHECK
     with:
       WORKFLOW_NAME: check-dependencies
       GIT_REF: ''
