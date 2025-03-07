@@ -258,8 +258,9 @@ jobs:
 
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
-      - uses: reside-eng/workflow-status-notification-action@v1.4.0
+      - uses: reside-eng/workflow-status-notification-action@v1
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
+          notify-type: on-failure-and-recovery
           github-token: ${{ secrets.GITHUB_TOKEN }}
