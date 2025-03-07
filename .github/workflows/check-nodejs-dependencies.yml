@@ -28,6 +28,10 @@ on:
         default: '18.x'
         required: false
         type: string
+      IS_MONOREPO:
+        default: false
+        required: false
+        type: boolean
     secrets:
       LIBRARY_CI_SERVICE_ACCOUNT:
         required: true
@@ -52,36 +56,24 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Configure NPM auth token
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_READ_TOKEN }}
-
       - name: Configure Package Manager
+      # NOTE: Used for npm outdated (run internally in reside-eng/npm-dependency-stats-action)
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
-        run: |
-          yarn install --immutable
+        env:
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
+        run: yarn install --immutable
 
       - name: Check top level outdated
         id: dep-stats
         uses: reside-eng/npm-dependency-stats-action@v3
         with:
           output-file: ./dep-stats.json
-
-      - name: Message outdated dependencies
-        run: |
-          percents=${{ fromJSON(steps.dep-stats.outputs.percents) }}
-          counts=${{ fromJSON(steps.dep-stats.outputs.counts) }}
-          totalDeps=${{ fromJSON(steps.dep-stats.outputs.counts).total }}
-          echo "Total Dependencies: $counts.total"
-          echo "Up to date: ${{ fromJSON(steps.dep-stats.outputs.counts).upToDate }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).upToDate }} %)"
-          echo "Major behind: ${{ fromJSON(steps.dep-stats.outputs.counts).major }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).major }} %)"
-          echo "Minor behind: ${{ fromJSON(steps.dep-stats.outputs.counts).minor }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).minor }} %)"
-          echo "Patch behind: ${{ fromJSON(steps.dep-stats.outputs.counts).patch }}/$totalDeps (${{ fromJSON(steps.dep-stats.outputs.percents).patch }} %)"
+          is-monorepo: ${{ inputs.IS_MONOREPO }}
 
       - name: Authenticate with Google Cloud
         uses: google-github-actions/auth@v2
@@ -99,11 +91,21 @@ jobs:
         env:
           BUCKET: ${{ inputs.BUCKET_NAME }}
           STATS_FOLDER: ${{ inputs.STATS_FOLDER }}
+          IS_MONOREPO: ${{ inputs.IS_MONOREPO }}
         run: |
-          echo "Uploading results to Google Cloud Storage\n"
-          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
-          gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
-          echo "\nSuccessfully uploaded dependency stats to Cloud Storage"
+          echo "Uploading results to Google Cloud Storage"
+          if [ "$IS_MONOREPO" = "true" ]; then
+            echo "Repo is monorepo, uploading dep stats for each package"
+            for d in ./dep-stats/*; do
+              folder=$(basename $d)
+              gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/$(date +%Y-%m-%d_%H-%M-%S).json
+              gsutil -m -q cp $d/dep-stats.json gs://$BUCKET/$STATS_FOLDER/$folder/latest.json
+            done
+          else
+            gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/$(date +%Y-%m-%d_%H-%M-%S).json
+            gsutil -m -q cp ./dep-stats.json gs://$BUCKET/$STATS_FOLDER/$SERVICE_NAME/latest.json
+          fi
+          echo "Successfully uploaded dependency stats to Cloud Storage"
 
       - name: CI Analytics
         if: always()
