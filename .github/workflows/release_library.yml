@@ -161,7 +161,7 @@ jobs:
 
       - name: Semantic Release
         if: inputs.IS_MONOREPO == false
-        uses: cycjimmy/semantic-release-action@v4.1.1
+        uses: cycjimmy/semantic-release-action@v4.2.0
         id: semantic
         with:
           # NOTE: ^19 is ESM and was causing a break
