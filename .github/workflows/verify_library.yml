@@ -133,16 +133,18 @@ jobs:
         if: inputs.ENABLE_SIZE_LIMIT_CHECK
         run: yarn size:check
 
-      - name: Auth Cloud SDK
+      - name: Authenticate with Google Cloud
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: google-github-actions/auth@v1
+        uses: google-github-actions/auth@v2
         with:
-          project_id: 'reside-stage'
-          credentials_json: '${{ secrets.CI_SERVICE_ACCOUNT }}'
+          project_id: reside-stage
+          credentials_json: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
-      - name: Set up Cloud SDK
+      - name: Set up Google Cloud CLI
         if: inputs.ENABLE_VISUAL_TESTING || inputs.ENABLE_PLAYWRIGHT
-        uses: google-github-actions/setup-gcloud@v1
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          skip_install: true
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
