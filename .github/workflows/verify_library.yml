@@ -185,11 +185,11 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@v4
 
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
-      - uses: reside-eng/workflow-status-notification-action@v1.4.2
+      - uses: reside-eng/workflow-status-notification-action@v1
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
