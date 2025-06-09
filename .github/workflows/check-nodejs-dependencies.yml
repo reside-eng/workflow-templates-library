@@ -60,7 +60,7 @@ jobs:
           cache: 'yarn'
 
       - name: Configure Package Manager
-      # NOTE: Used for npm outdated (run internally in reside-eng/npm-dependency-stats-action)
+        # NOTE: Used for npm outdated (run internally in reside-eng/npm-dependency-stats-action)
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
           npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_READ_TOKEN }}
