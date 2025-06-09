@@ -38,6 +38,9 @@ on:
       NPM_READ_TOKEN:
         required: true
 
+env:
+  NODE_VERSION: ${{ inputs.NODE_VERSION }}
+
 jobs:
   check-dependencies:
     name: ${{ inputs.WORKFLOW_NAME }}
