@@ -7,6 +7,10 @@ on:
         default: '18.x'
         required: false
         type: string
+      TEST_NODE_OPTIONS:
+        required: false
+        type: string
+        default: '--max_old_space_size=4096'
       TIMEOUT:
         default: 15
         required: false
@@ -102,10 +106,14 @@ jobs:
 
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE == false
+        env:
+          NODE_OPTIONS: ${{ inputs.TEST_NODE_OPTIONS }}
         run: yarn test
 
       - name: Test
         if: inputs.ENABLE_TESTING && inputs.ENABLE_COVERAGE
+        env:
+          NODE_OPTIONS: ${{ inputs.TEST_NODE_OPTIONS }}
         run: yarn test:cov
 
       - name: Authenticate with Google Cloud
