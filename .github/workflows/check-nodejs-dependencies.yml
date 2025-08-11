@@ -51,7 +51,7 @@ jobs:
       GIT_REF: ${{ inputs.GIT_REF }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Use Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
