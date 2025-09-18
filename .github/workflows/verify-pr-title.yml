@@ -1,0 +1,89 @@
+# NOTE: This was written instead of pre-built actions such as aslafy-z/conventional-pr-title-action
+# for improved speed (not using a container speeds up by ~30s per run)
+name: This is for verifying pull request titles adhere to conventional commit format
+
+on:
+  workflow_call:
+    inputs:
+      WORKFLOW_NAME:
+        required: true
+        type: string
+      # Default imeout for the job
+      TIMEOUT:
+        default: 15
+        required: false
+        type: number
+
+jobs:
+  check-merge-queue:
+    name: check merge queue
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    runs-on: ubuntu-latest
+    env:
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+    outputs:
+      IN_MERGE_QUEUE: ${{ steps.check-mq.outputs.IN_MERGE_QUEUE }}
+    steps:
+      - name: check if in merge queue
+        id: check-mq
+        run: |
+          echo "IN_MERGE_QUEUE=${{ toJSON(false) }}" >> $GITHUB_OUTPUT
+          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
+            echo "Running in Merge Queue!"
+            echo "IN_MERGE_QUEUE=${{ toJSON(true) }}" >> $GITHUB_OUTPUT
+          fi
+
+  lint-job-status:
+    needs: [check-merge-queue, lint]
+    # need the if statement due to a bug: https://github.com/actions/runner/issues/491
+    if: always() && needs.lint.result
+    name: Verify PR title job status
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    runs-on: ubuntu-latest
+    env:
+      JOB_STATUS: ${{ needs.lint.result }}
+    steps:
+      - name: checking lint job status
+        run: |
+          if [ "$JOB_STATUS" = "success" ] || [ "$JOB_STATUS" = "skipped" ]; then
+            # report success
+            exit 0
+          else
+            # report failure
+            exit 1
+          fi
+
+  lint:
+    needs: [check-merge-queue]
+    if: ${{ fromJSON(needs.check-merge-queue.outputs.IN_MERGE_QUEUE) != true }}
+    name: ${{ inputs.WORKFLOW_NAME }}
+    timeout-minutes: ${{ inputs.TIMEOUT }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate title
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { title, base, head } = context.payload.pull_request;
+            const owner = base.user.login;
+            const repo = base.repo.name;
+            // Match title against conventional commit pattern
+            const result = /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\([\w\-\.]+\))?(!)?: ([\w ])+([\s\S]*)/.test(title);
+            let state = 'success';
+            let description = 'Title is valid';
+            if (!result) {
+              state = 'failure';
+              description = 'Title is not valid format'; // must be less than 140 characters
+            }
+            await github.request(
+              'POST /repos/:owner/:repo/statuses/:sha',
+              {
+                owner,
+                repo,
+                state,
+                description,
+                sha: head.sha,
+                target_url: 'https://residenetwork.atlassian.net/wiki/spaces/ENG/pages/1604878337/PR%2BTitle%2BCommit%2BMessage%2BStyle%2BGuide',
+                context: 'Valid PR title',
+              },
+            );
