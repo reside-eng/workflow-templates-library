@@ -172,8 +172,7 @@ jobs:
         uses: cycjimmy/semantic-release-action@v4.2.2
         id: semantic
         with:
-          # NOTE: ^19 is ESM and was causing a break
-          semantic_version: ^18
+          semantic_version: ^24
           branches: |
             [
               '+([0-9])?(.{+([0-9]),x}).x',
@@ -189,7 +188,7 @@ jobs:
             @side/semantic-config-base
           # Sticky version until issue resolved. ref: https://github.com/semantic-release/semantic-release/issues/2922
           extra_plugins: |
-            conventional-changelog-conventionalcommits@6
+            conventional-changelog-conventionalcommits@8
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
