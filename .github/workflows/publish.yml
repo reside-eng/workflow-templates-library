@@ -14,7 +14,7 @@ concurrency:
   group: publish-${{ github.ref }}
 
 env:
-  NODE_VERSION: 18.x
+  NODE_VERSION: 24.x
 
 jobs:
   publish:
@@ -44,10 +44,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Semantic Release
-        uses: cycjimmy/semantic-release-action@v2
+        uses: cycjimmy/semantic-release-action@v4.2.2
         id: semantic
         with:
-          semantic_version: ^18
+          semantic_version: ^24
           branches: |
             [
               '+([0-9])?(.{+([0-9]),x}).x',
