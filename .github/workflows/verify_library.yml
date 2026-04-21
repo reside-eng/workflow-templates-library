@@ -156,14 +156,14 @@ jobs:
 
       - name: Run Playwright integration tests and upload preview
         if: inputs.ENABLE_PLAYWRIGHT
-        uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/playwright@v1.15.8
         id: playwright
         with:
           service-account: ${{ secrets.CI_SERVICE_ACCOUNT }}
 
       - name: Run Storybook and upload preview
         if: inputs.ENABLE_VISUAL_TESTING
-        uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/storybook@v1.15.8
         id: storybook
         with:
           percy-token: ${{ secrets.PERCY_TOKEN }}
@@ -172,7 +172,7 @@ jobs:
 
       - name: Comment preview links
         if: steps.storybook.outputs.preview-url != '' || steps.playwright.outputs.preview-url != ''
-        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/previews-comment@v1.15.8
         with:
           storybook-preview-url: ${{ steps.storybook.outputs.preview-url }}
           playwright-preview-url: ${{ steps.playwright.outputs.preview-url }}
@@ -180,7 +180,7 @@ jobs:
       - name: CI Analytics
         if: always()
         continue-on-error: true
-        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1.15.8
         with:
           RESULT: ${{ job.status }}
           CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
@@ -197,7 +197,7 @@ jobs:
 
       - uses: technote-space/workflow-conclusion-action@v3.0.3
 
-      - uses: reside-eng/workflow-status-notification-action@v1
+      - uses: reside-eng/workflow-status-notification-action@v1.4.8
         with:
           current-status: ${{ env.WORKFLOW_CONCLUSION }}
           slack-webhook: ${{ secrets[ inputs.SLACK_NOTIFICATION_SECRET ] }}
