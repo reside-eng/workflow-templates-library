@@ -73,7 +73,7 @@ jobs:
 
       - name: Check top level outdated
         id: dep-stats
-        uses: reside-eng/npm-dependency-stats-action@v3.2.12
+        uses: reside-eng/npm-dependency-stats-action@v3
         with:
           output-file: ./dep-stats.json
           is-monorepo: ${{ inputs.IS_MONOREPO }}
@@ -113,7 +113,7 @@ jobs:
       - name: CI Analytics
         if: always()
         continue-on-error: true
-        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1.15.8
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
         with:
           RESULT: ${{ job.status }}
           CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
