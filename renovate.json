@@ -17,12 +17,9 @@
       "pinDigests": true
     },
     {
-      "description": "Group and auto-merge non-major dependencies",
+      "description": "Group non-major action dependencies (auto-merge governed by the shared publisher whitelist in default.json)",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "matchDepTypes": ["action"],
-      "automerge": true,
-      "automergeType": "pr",
-      "automergeStrategy": "squash",
       "groupName": "Non major deps",
       "groupSlug": "non-major-deps"
     },
