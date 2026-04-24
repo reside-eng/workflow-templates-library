@@ -11,13 +11,6 @@
       "labels": ["dependencies"]
     },
     {
-      "description": "Group non-major action dependencies (auto-merge governed by the shared publisher whitelist in default.json)",
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "matchDepTypes": ["action"],
-      "groupName": "Non major deps",
-      "groupSlug": "non-major-deps"
-    },
-    {
       "description": "Configure Github Actions dependencies (labels, commit format). NOTE: This is actions for this repo NOT templates.",
       "matchDepTypes": ["action"],
       "labels": ["github_actions", "ci"],
