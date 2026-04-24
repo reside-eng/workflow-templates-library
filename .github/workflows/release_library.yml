@@ -211,6 +211,7 @@ jobs:
       - name: Publish to @latest dist-tag
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
           echo lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
         env:
@@ -221,6 +222,7 @@ jobs:
       - name: Publish to a prerelease dist-tag
         if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
         run: |
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_TOKEN"
           echo lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
