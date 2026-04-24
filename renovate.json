@@ -11,16 +11,6 @@
       "labels": ["dependencies"]
     },
     {
-      "description": "Group and auto-merge non-major dependencies",
-      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
-      "matchDepTypes": ["action"],
-      "automerge": true,
-      "automergeType": "pr",
-      "automergeStrategy": "squash",
-      "groupName": "Non major deps",
-      "groupSlug": "non-major-deps"
-    },
-    {
       "description": "Configure Github Actions dependencies (labels, commit format). NOTE: This is actions for this repo NOT templates.",
       "matchDepTypes": ["action"],
       "labels": ["github_actions", "ci"],
