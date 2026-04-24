@@ -11,12 +11,6 @@
       "labels": ["dependencies"]
     },
     {
-      "description": "Pin third-party GitHub Action digests (SHA + version comment). Excludes reside-eng first-party actions/workflows which stay on floating major tags.",
-      "matchDepTypes": ["action"],
-      "matchPackageNames": ["!/^reside-eng\\//"],
-      "pinDigests": true
-    },
-    {
       "description": "Group non-major action dependencies (auto-merge governed by the shared publisher whitelist in default.json)",
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "matchDepTypes": ["action"],
