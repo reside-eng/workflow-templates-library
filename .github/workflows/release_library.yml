@@ -90,10 +90,6 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Configure NPM auth token
-        run: |
-          yarn config set npmAuthToken ${{ secrets.NPM_PUBLISH_TOKEN }}
-
       - name: Configure Package Manager
         run: |
           echo Configuring NPM_TOKEN globally for .npmrc
@@ -101,6 +97,8 @@ jobs:
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
+        env:
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
         run: |
           yarn install --immutable
 
@@ -222,6 +220,8 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
 
       - name: Publish to a prerelease dist-tag
         if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
@@ -230,6 +230,8 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
 
       - name: CI Analytics
         if: always()
