@@ -1,9 +1,5 @@
 name: 'Playwright'
 description: 'Run Playwright and upload results to Google Cloud Storage'
-inputs:
-  service-account:
-    description: 'Service account for authenticating Google for Cloud Storage Upload'
-    required: true
 outputs:
   preview-url:
     description: 'URL of Playwright Preview'

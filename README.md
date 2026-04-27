@@ -27,8 +27,8 @@ Templates for Side librairies github actions
 | Secret | Required |
 | ---------------------- | ---------------------- |
 | NPM_READ_TOKEN | `true` |
-| CI_SERVICE_ACCOUNT | `false` |
-
+| LIBRARY_CI_SERVICE_ACCOUNT | `true` |
+| PERCY_TOKEN | `false` (required when `ENABLE_VISUAL_TESTING=true`) |
 
 ## verify_library
 
@@ -51,8 +51,9 @@ Templates for Side librairies github actions
 | Secret | Required |
 | ---------------------- | ---------------------- |
 | NPM_PUBLISH_TOKEN | `true` |
-| CI_SERVICE_ACCOUNT | `false` |
-| SIDE_CI_APPLICATION_ID | `false` |
-| SIDE_CI_APPLICATION_PRIVATE_KEY | `false` |
-| PERCY_TOKEN | `false` |
+| NPM_READ_TOKEN | `true` |
+| LIBRARY_CI_SERVICE_ACCOUNT | `true` |
+| SIDE_CI_APPLICATION_ID | `false` (required when `IS_MONOREPO=true`) |
+| SIDE_CI_APPLICATION_PRIVATE_KEY | `false` (required when `IS_MONOREPO=true`) |
+| PERCY_TOKEN | `false` (required when `ENABLE_VISUAL_TESTING=true`) |
 
