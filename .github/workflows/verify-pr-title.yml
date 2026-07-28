@@ -6,84 +6,57 @@ on:
   workflow_call:
     inputs:
       WORKFLOW_NAME:
-        required: true
+        description: 'DEPRECATED: unused, kept for consumer compatibility'
+        required: false
         type: string
-      # Default imeout for the job
+      # Default timeout for the job
       TIMEOUT:
         default: 15
         required: false
         type: number
 
 jobs:
-  check-merge-queue:
-    name: check merge queue
-    timeout-minutes: ${{ inputs.TIMEOUT }}
-    runs-on: ubuntu-latest
-    env:
-      GITHUB_EVENT_NAME: ${{ github.event_name }}
-    outputs:
-      IN_MERGE_QUEUE: ${{ steps.check-mq.outputs.IN_MERGE_QUEUE }}
-    steps:
-      - name: check if in merge queue
-        id: check-mq
-        run: |
-          echo "IN_MERGE_QUEUE=${{ toJSON(false) }}" >> $GITHUB_OUTPUT
-          if [ "$GITHUB_EVENT_NAME" = "merge_group" ]; then
-            echo "Running in Merge Queue!"
-            echo "IN_MERGE_QUEUE=${{ toJSON(true) }}" >> $GITHUB_OUTPUT
-          fi
-
-  lint-job-status:
-    needs: [check-merge-queue, lint]
-    # need the if statement due to a bug: https://github.com/actions/runner/issues/491
-    if: always() && needs.lint.result
+  # Single job named so the emitted context stays "<caller job> / Verify PR title job status"
+  lint:
     name: Verify PR title job status
     timeout-minutes: ${{ inputs.TIMEOUT }}
-    runs-on: ubuntu-latest
-    env:
-      JOB_STATUS: ${{ needs.lint.result }}
-    steps:
-      - name: checking lint job status
-        run: |
-          if [ "$JOB_STATUS" = "success" ] || [ "$JOB_STATUS" = "skipped" ]; then
-            # report success
-            exit 0
-          else
-            # report failure
-            exit 1
-          fi
-
-  lint:
-    needs: [check-merge-queue]
-    if: ${{ fromJSON(needs.check-merge-queue.outputs.IN_MERGE_QUEUE) != true }}
-    name: ${{ inputs.WORKFLOW_NAME }}
-    timeout-minutes: ${{ inputs.TIMEOUT }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - name: Validate title
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
-            const { title, base, head } = context.payload.pull_request;
-            const owner = base.user.login;
-            const repo = base.repo.name;
+            const isPullRequest = context.eventName === 'pull_request';
+            let title;
+            let headSha;
+            if (isPullRequest) {
+              ({ title, head: { sha: headSha } } = context.payload.pull_request);
+            } else {
+              // merge_group: no PR payload — ref is gh-readonly-queue/<base>/pr-<N>-<sha>
+              const match = process.env.GITHUB_REF_NAME.match(/pr-(\d+)-/);
+              if (!match) {
+                core.setFailed(`Cannot derive PR number from ref: ${process.env.GITHUB_REF_NAME}`);
+                return;
+              }
+              const { data: pr } = await github.rest.pulls.get({ ...context.repo, pull_number: Number(match[1]) });
+              title = pr.title;
+            }
             // Match title against conventional commit pattern
             const result = /^(build|chore|ci|docs|feat|fix|perf|refactor|revert|style|test){1}(\([\w\-\.]+\))?(!)?: ([\w ])+([\s\S]*)/.test(title);
-            let state = 'success';
-            let description = 'Title is valid';
-            if (!result) {
-              state = 'failure';
-              description = 'Title is not valid format'; // must be less than 140 characters
+            if (isPullRequest) {
+              await github.request(
+                'POST /repos/:owner/:repo/statuses/:sha',
+                {
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  state: result ? 'success' : 'failure',
+                  description: result ? 'Title is valid' : 'Title is not valid format', // must be less than 140 characters
+                  sha: headSha,
+                  target_url: 'https://residenetwork.atlassian.net/wiki/spaces/ENG/pages/1604878337/PR%2BTitle%2BCommit%2BMessage%2BStyle%2BGuide',
+                  context: 'Valid PR title',
+                },
+              );
             }
-            await github.request(
-              'POST /repos/:owner/:repo/statuses/:sha',
-              {
-                owner,
-                repo,
-                state,
-                description,
-                sha: head.sha,
-                target_url: 'https://residenetwork.atlassian.net/wiki/spaces/ENG/pages/1604878337/PR%2BTitle%2BCommit%2BMessage%2BStyle%2BGuide',
-                context: 'Valid PR title',
-              },
-            );
+            if (!result) {
+              core.setFailed(`PR title is not valid conventional commit format: "${title}"`);
+            }
