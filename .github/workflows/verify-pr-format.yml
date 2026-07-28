@@ -1,0 +1,30 @@
+name: Verify PR format
+
+on:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - reopened
+      - edited
+      - synchronize
+  merge_group:
+    types: [checks_requested]
+
+permissions:
+  actions: write
+  contents: write
+  deployments: write
+  id-token: write
+  issues: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  build:
+    name: Verify PR title
+    # Local reference so the PR's own version of the template is exercised
+    uses: ./.github/workflows/verify-pr-title.yml
+    with:
+      WORKFLOW_NAME: Verify PR title
