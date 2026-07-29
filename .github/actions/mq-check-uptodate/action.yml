@@ -1,0 +1,90 @@
+# PUBLIC-SAFE copy of reside-eng/workflow-templates/.github/actions/mq-check-uptodate@v12.
+# Needed because `workflow-templates` is INTERNAL and public repos cannot resolve it.
+# Pure bash composite with no internal dependencies, so this is a verbatim copy —
+# keep it in sync with the internal version.
+name: MQ check PR up-to-date
+description: >-
+  In a merge_group run, decide whether the PR-head checks already ran on the
+  exact current head. Outputs pr-uptodate=true to skip the MQ checks. Fails the
+  step (so GitHub evicts the PR) when the queue tree matches the PR head but no
+  successful PR-head Verify run exists yet (the "Update branch" timing race).
+
+inputs:
+  github-token:
+    description: Token used to query the Actions API.
+    required: true
+  pr-number:
+    description: PR number (parsed from the gh-readonly-queue ref by the caller).
+    required: true
+  verify-workflow-file:
+    description: Filename of the PR verify workflow whose run gates the merge.
+    required: false
+    default: verify.yml
+
+outputs:
+  pr-uptodate:
+    description: true to skip MQ checks, false to run them.
+    value: ${{ steps.check.outputs.PR_UPTODATE }}
+
+runs:
+  using: composite
+  steps:
+    - name: Check
+      id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        REPO: ${{ github.repository }}
+        PR_NUMBER: ${{ inputs.pr-number }}
+        VERIFY_WORKFLOW_FILE: ${{ inputs.verify-workflow-file }}
+      run: |
+        set -uo pipefail
+        # emit writes to both step outputs and job env (callers may read env.PR_UPTODATE).
+        emit() { printf '%s<<EOF\n%s\nEOF\n' "$1" "$2" | tee -a "$GITHUB_OUTPUT" "$GITHUB_ENV" >/dev/null; }
+
+        if [ "$GITHUB_EVENT_NAME" != "merge_group" ]; then
+          echo "Not in Merge Queue"
+          emit PR_UPTODATE false
+          exit 0
+        fi
+
+        # PR head GitHub admitted on (not the gh-readonly-queue merge commit).
+        git fetch origin "pull/$PR_NUMBER/head:$PR_NUMBER-pr-branch"
+        PR_HEAD_SHA="$(git rev-parse "$PR_NUMBER-pr-branch")"
+
+        if [ -z "$PR_HEAD_SHA" ]; then
+          echo "WARN: Could not resolve PR head SHA -> run MQ checks"
+          emit PR_UPTODATE false
+          exit 0
+        fi
+
+        # CASE 1: tree differs from PR head -> new combination, run full MQ checks.
+        if [[ -n "$(git --no-pager diff "$GITHUB_REF_NAME..$PR_NUMBER-pr-branch")" ]]; then
+          echo "Tree differs from PR head -> run MQ checks"
+          emit PR_UPTODATE false
+          exit 0
+        fi
+
+        # Tree matches: skip only if verify.yml succeeded on THIS exact head SHA (its run == the
+        # gate; head_sha filtered server-side, so a stale prior-head success can't match).
+        api_ok=true
+        verified_runs="$(gh api -X GET "repos/$REPO/actions/workflows/$VERIFY_WORKFLOW_FILE/runs" \
+          -f head_sha="$PR_HEAD_SHA" -f event=pull_request -f status=success \
+          --jq '.total_count')" || api_ok=false
+
+        if [ "$api_ok" != true ]; then
+          # API error -> fall back to existing behaviour (skip on tree match).
+          echo "WARN: Actions API unavailable -> skip (existing behaviour)"
+          emit PR_UPTODATE true
+          exit 0
+        fi
+
+        if [ "${verified_runs:-0}" -gt 0 ]; then
+          echo "PR head $PR_HEAD_SHA verified green on its exact SHA -> skip MQ checks"
+          emit PR_UPTODATE true
+        else
+          # Tree matches but the PR-head Verify has not passed on this SHA yet (timing race).
+          # Fail so GitHub evicts the PR; re-queue once the PR-head Verify is green.
+          echo "::error title=Merge queue eviction (timing race, not a code failure)::PR #$PR_NUMBER was queued before its latest commit's required checks finished. Re-queue it once the PR-head Verify is green."
+          exit 1
+        fi

@@ -1,0 +1,15 @@
+# Self-CI: this repo consuming its own code-review reusable workflow.
+# See claude-code-self.yml for why the consumer moved into its own file.
+
+name: PR code Review
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  code-review:
+    uses: ./.github/workflows/code-review.yml
+    secrets: inherit

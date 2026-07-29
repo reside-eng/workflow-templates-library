@@ -1,0 +1,74 @@
+# Requests a review from a GitHub team on PRs touching CI / package-manager config.
+#
+# PUBLIC-SAFE copy of reside-eng/workflow-templates/.github/workflows/request-devops-review.yml@v12,
+# needed because `workflow-templates` is INTERNAL and public repos cannot resolve it.
+# Uses the dedicated side-review-request App (pull_requests:write + members:read only), whose
+# REVIEW_REQUEST_APP_* org secrets are all-repository visible.
+#
+# Consumer example:
+#
+#   name: Request DevOps Review
+#
+#   on:
+#     pull_request:
+#       paths:
+#         - '.github/**'
+#         - '.yarnrc.yml'
+#         - '.yarn/**'
+#
+#   jobs:
+#     request-devops-review:
+#       uses: reside-eng/workflow-templates-library/.github/workflows/request-devops-review.yml@v1
+#       secrets: inherit
+
+name: Request Devops Review
+
+on:
+  workflow_call:
+    inputs:
+      team:
+        default: 'devops'
+        required: false
+        type: string
+        description: 'GitHub team slug to request the PR review from'
+
+jobs:
+  request-review:
+    name: Request team review
+    # PUBLIC: `ubuntu-latest` rather than the org-scoped `ubuntu-slim` label the internal copy
+    # uses — standard hosted runners are always available to public repos and free for them.
+    runs-on: ubuntu-latest
+    # Same Renovate actors excluded in verify_library.yml
+    if: github.actor != 'renovate[bot]' && github.actor != 'self-hosted-renovate-side-inc[bot]'
+    steps:
+      - name: Check app credentials are visible
+        env:
+          APP_ID: ${{ secrets.REVIEW_REQUEST_APP_ID }}
+        run: |
+          if [ -z "$APP_ID" ]; then
+            echo "::error::REVIEW_REQUEST_APP_ID/_PRIVATE_KEY not visible - caller must use 'secrets: inherit' (org secrets are all-repository)"
+            exit 1
+          fi
+
+      - name: Get GitHub App token
+        id: get-workflow-token
+        uses: peter-murray/workflow-application-token-action@cb731e00cb6754f584507134ff389dfb3dc42bbc # v5.1.0
+        with:
+          application_id: ${{ secrets.REVIEW_REQUEST_APP_ID }}
+          application_private_key: ${{ secrets.REVIEW_REQUEST_APP_PRIVATE_KEY }}
+
+      - name: Request team review
+        env:
+          GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
+          TEAM: ${{ inputs.team }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          # Re-runs: POSTing an already-requested team errors, so pre-check and tolerate failure
+          if gh api "repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers" \
+            --jq '.teams[].slug' | grep -qx "$TEAM"; then
+            echo "Review already requested from team $TEAM: nothing to do"
+            exit 0
+          fi
+          gh api -X POST "repos/${{ github.repository }}/pulls/$PR_NUMBER/requested_reviewers" \
+            -f "team_reviewers[]=$TEAM" \
+            || echo "::notice::Could not request review from team $TEAM (likely already requested)"
