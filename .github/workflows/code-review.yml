@@ -1,21 +1,155 @@
-name: PR code Review
+# AI PR review — PUBLIC-SAFE reusable implementation.
+#
+# Mirrors reside-eng/workflow-templates/.github/workflows/code-review.yml@v12, but lives here
+# because `workflow-templates` is INTERNAL and a public repo cannot resolve anything from it.
+# Public repos must consume this copy. Differences are deliberate and marked "PUBLIC:".
+#
+# Consumer example:
+#
+#   name: PR code Review
+#
+#   on:
+#     pull_request:
+#       types: [opened, ready_for_review, reopened]
+#     issue_comment:
+#       types: [created]
+#
+#   jobs:
+#     code-review:
+#       uses: reside-eng/workflow-templates-library/.github/workflows/code-review.yml@v1
+#       secrets: inherit
+
+name: PR Code Review
 
 on:
-  pull_request:
-    types: [opened, ready_for_review, reopened]
-  issue_comment:
-    types: [created]
-
-permissions:
-  actions: write
-  contents: write
-  deployments: write
-  id-token: write
-  issues: write
-  pull-requests: write
-  statuses: write
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_API_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      CLAUDE_CODE_SETTINGS:
+        required: false
 
 jobs:
   code-review:
-    uses: reside-eng/workflow-templates/.github/workflows/code-review.yml@v12
-    secrets: inherit
+    # PUBLIC additions to the internal condition:
+    #  - fork guard: a `pull_request` from a fork gets no secrets, so the review could only fail
+    #    confusingly. Skip instead. (Deliberately NOT solved with `pull_request_target`, which
+    #    would expose our secrets to untrusted fork code.)
+    #  - author_association gate on the `@claude /review` comment path, since anyone can comment
+    #    on a public repo.
+    if: >-
+      vars.CLAUDE_CODE_REVIEW == 'true'
+      && github.actor != 'renovate[bot]'
+      && github.actor != 'self-hosted-renovate-side-inc[bot]'
+      && (
+        (
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
+        )
+        || (
+          github.event_name == 'issue_comment'
+          && contains(github.event.comment.body, '@claude /review')
+          && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+        )
+      )
+    # PUBLIC: GitHub-hosted rather than the self-hosted `arc-runner-20` used internally.
+    runs-on: ubuntu-latest
+    env:
+      MAX_TURNS: 40
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Configure Claude Code Settings
+        env:
+          CLAUDE_CODE_SETTINGS: ${{ secrets.CLAUDE_CODE_SETTINGS }}
+        run: |
+          if [ -n "$CLAUDE_CODE_SETTINGS" ]; then
+            echo "$CLAUDE_CODE_SETTINGS" | jq \
+              --arg repo "${{ github.repository }}" \
+              '.env.OTEL_RESOURCE_ATTRIBUTES = "github.repository=" + $repo' \
+              > "$RUNNER_TEMP/claude-settings.json"
+          fi
+
+      - name: PR Review
+        id: claude
+        uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+        with:
+          anthropic_api_key: ${{ vars.USE_CLAUDE_CODE_OAUTH_TOKEN != 'true' && secrets.CLAUDE_CODE_API_KEY || '' }}
+          claude_code_oauth_token: ${{ vars.USE_CLAUDE_CODE_OAUTH_TOKEN == 'true' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          settings: ${{ runner.temp }}/claude-settings.json
+          track_progress: true
+          prompt: |
+            You are a senior code reviewer. Review PR #${{ github.event.pull_request.number || github.event.issue.number }} in ${{ github.repository }}.
+
+            ## Instructions
+
+            1. Check if a `REVIEW.md` file exists at the repository root. If it does, read it and incorporate its instructions as additional review criteria — they take precedence over the defaults below.
+            2. Review the changed files listed in the PR context above. Use the Read tool to examine each changed file.
+            3. Read only the changed files to understand the modifications. Only read surrounding files if you need to verify a specific concern (e.g., checking a function signature or type definition).
+            4. Follow any conventions documented in CLAUDE.md or AGENTS.md if present. Do NOT spend turns exploring the repo to auto-detect conventions.
+
+            ## Turn Budget
+
+            You have a hard limit of ${{ env.MAX_TURNS }} turns for this entire review (one turn = one tool call). Budget accordingly:
+            - Reserve ~5 turns for posting inline comments and the summary at the end.
+            - For large PRs, prioritize 🔴 Critical and 🟡 Warning findings — drop 🔵 Suggestions if turns are tight.
+            - Only read files/context that would change a finding; skip speculative exploration.
+            - If turns are running low, post what you have rather than truncating mid-review.
+
+            ## Review Focus Areas (in priority order)
+
+            1. **Security & Auth** — Injection risks, secrets/credentials exposure, input validation, auth/authz logic flaws, unsafe deserialization, SSRF, path traversal.
+            2. **Error Handling & Resilience** — Unhandled errors/rejections, missing try-catch, silent failures, missing validation, lack of graceful degradation, improper async/await usage.
+            3. **Performance & Scalability** — N+1 queries, blocking I/O in hot paths, unnecessary allocations, memory leaks, missing indexes, unbounded data fetching, inefficient algorithms.
+            4. **Code Quality & Patterns** — Violation of existing codebase patterns, DRY/SOLID principle violations, poor abstractions, misleading names, overly complex logic, dead code, hidden coupling between modules.
+            5. **Test Coverage** (suggestions only) — Gently note when new or changed logic lacks corresponding tests, but treat this as a suggestion, not a blocker.
+
+            ## What to IGNORE
+
+            - Formatting, spacing, indentation, or style issues (handled by ESLint/Prettier).
+            - Trivial nitpicks: minor naming preferences, import ordering, cosmetic choices.
+            - Do NOT flag issues in unchanged code unless they are directly impacted by the PR changes.
+
+            ## Severity Classification
+
+            Classify every finding with one of these labels:
+            - 🔴 **Critical** — Must fix. Security vulnerabilities, data loss risks, broken logic, crashes.
+            - 🟡 **Warning** — Should fix. Bugs, poor error handling, performance issues, pattern violations.
+            - 🔵 **Suggestion** — Nice to have. Improvements, refactoring ideas, missing tests.
+
+            ## Output Format
+
+            **Inline comments**: Post directly on the relevant lines for specific issues. Each inline comment must include the severity label, a concise description of the problem, and a concrete fix or recommendation.
+
+            **Summary comment**: Post a single top-level PR comment with:
+            - A brief overall assessment (1-2 sentences).
+            - A grouped list of all findings by severity (🔴 then 🟡 then 🔵).
+            - If the PR is clean, acknowledge good practices briefly — do not invent issues.
+
+            ## Review Principles
+
+            - Be constructive and balanced: flag real problems, acknowledge good patterns.
+            - Every finding must be actionable — explain *why* it's an issue and *what* to do.
+            - Prefer fewer high-quality comments over many low-value ones.
+            - If unsure whether something is an issue, mention it as a 🔵 Suggestion with your reasoning.
+            - Do NOT repeat what linters or CI already catch.
+
+          claude_args: |
+            --model claude-opus-4-6
+            --max-turns ${{ env.MAX_TURNS }}
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,WebSearch,WebFetch"
+
+      - name: CI Analytics
+        if: always()
+        continue-on-error: true
+        # PUBLIC: this repo's own ci-analytics (wraps the PUBLIC workflow-ci-analytics-action).
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        with:
+          RESULT: ${{ job.status }}

@@ -1,25 +1,132 @@
+# Claude Code assistant — PUBLIC-SAFE reusable implementation.
+#
+# Mirrors reside-eng/workflow-templates/.github/workflows/claude-code.yml@v12, but lives here
+# because `workflow-templates` is INTERNAL and a public repo cannot resolve anything from it.
+# Public repos must consume this copy. Differences from the internal version are deliberate and
+# marked "PUBLIC:" below — please do not "resync" them away.
+#
+# Consumer example:
+#
+#   name: Claude Code
+#
+#   on:
+#     issue_comment:
+#       types: [created]
+#     pull_request_review_comment:
+#       types: [created]
+#     issues:
+#       types: [opened, assigned]
+#     pull_request_review:
+#       types: [submitted]
+#
+#   jobs:
+#     claude:
+#       uses: reside-eng/workflow-templates-library/.github/workflows/claude-code.yml@v1
+#       secrets: inherit
+
 name: Claude Code
 
 on:
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
-  issues:
-    types: [opened, assigned]
-  pull_request_review:
-    types: [submitted]
-
-permissions:
-  actions: write
-  contents: write
-  deployments: write
-  id-token: write
-  issues: write
-  pull-requests: write
-  statuses: write
+  workflow_call:
+    secrets:
+      CLAUDE_CODE_API_KEY:
+        required: false
+      CLAUDE_CODE_OAUTH_TOKEN:
+        required: false
+      # PUBLIC: optional here, `required: true` in the internal version. Org secrets are not
+      # necessarily visible to public repositories, and a required-but-missing secret fails the
+      # workflow at start-up. Missing Jira credentials must degrade to "Claude without the
+      # Atlassian MCP" instead.
+      JIRA_API_TOKEN:
+        required: false
+      JIRA_USER_EMAIL:
+        required: false
+      CLAUDE_CODE_SETTINGS:
+        required: false
 
 jobs:
   claude:
-    uses: reside-eng/workflow-templates/.github/workflows/claude-code.yml@v12
-    secrets: inherit
+    # PUBLIC: fully parenthesised so CLAUDE_CODE_ASSISTANT gates EVERY event. `&&` binds tighter
+    # than `||`, so the internal version's `A && (B) || (C) || (D)` collapses to
+    # `(A && B) || C || D` and the flag only ever gates issue_comment. On a public repo that
+    # would let anyone trigger a run through issues/reviews with the feature switched off.
+    #
+    # PUBLIC: author_association gate. On a public repo anyone can comment or open an issue, so
+    # without this any internet user could invoke Claude with contents:write.
+    if: >-
+      vars.CLAUDE_CODE_ASSISTANT == 'true'
+      && (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') && !contains(github.event.comment.body, '@claude /review'))
+        || (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') && !contains(github.event.comment.body, '@claude /review'))
+        || (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude') && !contains(github.event.review.body, '@claude /review'))
+        || (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      )
+      && contains(
+        fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+        github.event.comment.author_association
+          || github.event.review.author_association
+          || github.event.issue.author_association
+      )
+    # PUBLIC: GitHub-hosted, NOT the self-hosted `arc-runner-20` used internally. Anyone can
+    # comment on a public repo, so routing that to our ARC/GKE runners would let outsiders
+    # execute on our own infrastructure.
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Configure Atlassian MCP
+        id: mcp
+        env:
+          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+        run: |
+          # PUBLIC: emit an empty server map when the Jira secrets are not visible to this repo.
+          if [ -z "$JIRA_API_TOKEN" ] || [ -z "$JIRA_USER_EMAIL" ]; then
+            echo "::notice::Jira secrets not available - running without the Atlassian MCP"
+            echo 'config={"mcpServers":{}}' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          AUTH=$(echo -n "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" | base64 -w0 2>/dev/null || echo -n "$JIRA_USER_EMAIL:$JIRA_API_TOKEN" | base64)
+          MCP_CONFIG=$(jq -cn \
+            --arg auth "Basic $AUTH" \
+            '{mcpServers:{atlassian:{type:"http",url:"https://mcp.atlassian.com/v1/mcp",headers:{Authorization:$auth}}}}')
+          echo "config=$MCP_CONFIG" >> "$GITHUB_OUTPUT"
+
+      - name: Configure Claude Code Settings
+        env:
+          CLAUDE_CODE_SETTINGS: ${{ secrets.CLAUDE_CODE_SETTINGS }}
+        run: |
+          if [ -n "$CLAUDE_CODE_SETTINGS" ]; then
+            echo "$CLAUDE_CODE_SETTINGS" | jq \
+              --arg repo "${{ github.repository }}" \
+              '.env.OTEL_RESOURCE_ATTRIBUTES = "github.repository=" + $repo' \
+              > "$RUNNER_TEMP/claude-settings.json"
+          fi
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@6c0083bb7289c31716797a039b6367b3079cc46e # v1.0.162
+        with:
+          anthropic_api_key: ${{ vars.USE_CLAUDE_CODE_OAUTH_TOKEN != 'true' && secrets.CLAUDE_CODE_API_KEY || '' }}
+          claude_code_oauth_token: ${{ vars.USE_CLAUDE_CODE_OAUTH_TOKEN == 'true' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
+          settings: ${{ runner.temp }}/claude-settings.json
+          claude_args: |
+            --model claude-opus-4-6
+            --max-turns 40
+            --mcp-config '${{ steps.mcp.outputs.config }}'
+            --allowedTools "Bash,Write,Edit,WebSearch,WebFetch,Skill,mcp__atlassian__*"
+
+      - name: CI Analytics
+        if: always()
+        continue-on-error: true
+        # PUBLIC: this repo's own ci-analytics, which wraps the PUBLIC
+        # reside-eng/workflow-ci-analytics-action. The internal repo's action is unreachable here.
+        uses: reside-eng/workflow-templates-library/.github/actions/ci-analytics@v1
+        with:
+          RESULT: ${{ job.status }}
