@@ -261,11 +261,13 @@ async function main() {
     }
     if (rel.prerelease || isPrerelease(version)) continue;
 
+    // Not gated on the sentinel: a graduation whose range DOES include the squash commit
+    // publishes a collapsed one-entry body instead of the sentinel, and loses the prerelease
+    // detail just the same (observed live on @side/test-monorepo-hello@11.2.0, 2026-07-30).
+    // Whether there is anything to add is the engine's call — its nothing-new-vs-stable no-op
+    // and sha-level dedupe decide, exactly as they do for Adapter A.
     if (!SENTINEL_RE.test(rel.body || '')) {
-      log(
-        `graduation-notes: ${tag} — body is not the "version bump only" sentinel, skipping`,
-      );
-      continue;
+      log(`graduation-notes: ${tag} — collapsed body (no sentinel), letting the engine decide`);
     }
     // lastStable = the greatest stable release of THIS package below the graduated version.
     const cur = parseVersion(version);
