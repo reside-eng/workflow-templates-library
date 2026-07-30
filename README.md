@@ -57,3 +57,27 @@ Templates for Side librairies github actions
 | SIDE_CI_APPLICATION_PRIVATE_KEY | `false` (required when `IS_MONOREPO=true`) |
 | PERCY_TOKEN | `false` (required when `ENABLE_VISUAL_TESTING=true`) |
 
+### Graduation notes (Lerna monorepos only)
+
+| Input | Type | Default | Required |
+| ---------------------- | ------------------------------------------------ | --------- | -------------------- |
+| ENABLE_GRADUATION_NOTES | boolean | true | `false` |
+| GRADUATION_NOTES_SPEC | string | @side/graduation-notes@^1 | `false` |
+
+When a prerelease line graduates, `lerna publish --conventional-graduate` resolves
+conventional-changelog's `from` to the last **prerelease** tag of the package. The commit range is
+empty, so the GitHub Release body is just
+`**Note:** Version bump only for package <pkg>` — every itemised change of the prerelease line is
+missing from the stable release (`packages/<pkg>/CHANGELOG.md` still has them; only the release body
+is empty).
+
+After `lerna publish` on `main`, this workflow aggregates the package's own prerelease releases into
+the stable release **body** via
+[`.github/actions/graduation-notes`](.github/actions/graduation-notes). It patches release bodies
+only — no commit, no push, no bypass actor — is idempotent, and re-reads every release it patched to
+assert the notes actually published.
+
+The aggregation engine (`@side/graduation-notes`) is installed at release time. **Until it is
+published the step warns and skips**, leaving releases exactly as Lerna produced them. Set
+`ENABLE_GRADUATION_NOTES: false` to opt out entirely.
+
