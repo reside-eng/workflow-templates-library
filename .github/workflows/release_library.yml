@@ -250,7 +250,7 @@ jobs:
       # Runs only after the graduating publish: lerna leaves those release bodies empty.
       - name: Aggregate graduated release notes
         if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO && inputs.ENABLE_GRADUATION_NOTES
-        uses: reside-eng/workflow-templates-library/.github/actions/graduation-notes@v1
+        uses: reside-eng/workflow-templates-library/.github/actions/graduation-notes@feat/graduation-notes-lerna
         with:
           github-token: ${{ steps.get-workflow-token.outputs.token }}
           engine-spec: ${{ inputs.GRADUATION_NOTES_SPEC }}
