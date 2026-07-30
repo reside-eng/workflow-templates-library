@@ -48,6 +48,11 @@ on:
         default: '@side/graduation-notes@^1'
         required: false
         type: string
+      # Path to a vendored engine bin; skips the registry install (validation / pre-publish repos)
+      GRADUATION_NOTES_ENGINE_BIN:
+        default: ''
+        required: false
+        type: string
       ENABLE_SLACK_NOTIFICATION:
         default: true
         required: false
@@ -249,6 +254,7 @@ jobs:
         with:
           github-token: ${{ steps.get-workflow-token.outputs.token }}
           engine-spec: ${{ inputs.GRADUATION_NOTES_SPEC }}
+          engine-bin: ${{ inputs.GRADUATION_NOTES_ENGINE_BIN }}
 
       - name: CI Analytics
         if: always()
