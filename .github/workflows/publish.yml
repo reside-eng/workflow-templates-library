@@ -60,13 +60,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # The v* aliases are protected by the release-alias-branches org ruleset, whose bypass actor
+      # is the SIDE_CI App (GitHub refuses the implicit GitHub Actions app as an org-ruleset bypass
+      # actor). The alias push must therefore authenticate as SIDE_CI, not GITHUB_TOKEN.
+      # Recursion-safe: no workflow here triggers on push to v* branches.
+      - name: Get SIDE_CI token for the alias push
+        id: alias-token
+        if: steps.semantic.outputs.new_release_published == 'true'
+        uses: peter-murray/workflow-application-token-action@cb731e00cb6754f584507134ff389dfb3dc42bbc # v5.1.0
+        with:
+          application_id: ${{ secrets.SIDE_CI_APPLICATION_ID }}
+          application_private_key: ${{ secrets.SIDE_CI_APPLICATION_PRIVATE_KEY }}
+
       - name: Push updates to branch for major version
         # If a new version is published, i.e. v1.2.3 then this step will update
         # branch "v1" to this commit.
         # https://github.com/reside-eng/workflow-templates-library/branches
         if: steps.semantic.outputs.new_release_published == 'true'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.alias-token.outputs.token }}
         run: |
           git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git HEAD:refs/heads/v${{steps.semantic.outputs.new_release_major_version}}
 
