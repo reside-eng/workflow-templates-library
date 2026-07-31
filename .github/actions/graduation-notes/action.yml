@@ -1,0 +1,39 @@
+name: Graduation notes (Lerna)
+description: >-
+  Post-publish repair of the GitHub Release bodies that `lerna publish
+  --conventional-graduate` leaves empty. On a graduation lerna's changelog range starts at the
+  last PRERELEASE tag, so the range is empty and the body becomes
+  `**Note:** Version bump only for package <pkg>`. This aggregates the prerelease releases of
+  that package into the stable release BODY — no commit, no push, no bypass actor.
+
+inputs:
+  github-token:
+    description: Token with contents:write on this repo (the App token the release job minted).
+    required: true
+  engine-spec:
+    description: npm spec of the aggregation engine to install at release time.
+    required: false
+    default: '@side/graduation-notes@^1'
+  engine-bin:
+    description: >-
+      Pre-resolved path to the engine's bin.mjs. Skips the install — for repos that vendor the
+      engine while `@side/graduation-notes` is unpublished, and for local testing.
+    required: false
+    default: ''
+  dry-run:
+    description: Compute and print the bodies without patching anything.
+    required: false
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Patch graduated release bodies
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+        GH_TOKEN: ${{ inputs.github-token }}
+        GRADUATION_NOTES_SPEC: ${{ inputs.engine-spec }}
+        GRADUATION_NOTES_BIN: ${{ inputs.engine-bin }}
+        GRADUATION_NOTES_DRY_RUN: ${{ inputs.dry-run == 'true' && '1' || '0' }}
+      run: node "$GITHUB_ACTION_PATH/graduation-notes-lerna.mjs"

@@ -39,6 +39,20 @@ on:
         default: true
         required: false
         type: boolean
+      # Lerna (IS_MONOREPO) only: repair the empty release bodies --conventional-graduate produces
+      ENABLE_GRADUATION_NOTES:
+        default: true
+        required: false
+        type: boolean
+      GRADUATION_NOTES_SPEC:
+        default: '@side/graduation-notes@^1'
+        required: false
+        type: string
+      # Path to a vendored engine bin; skips the registry install (validation / pre-publish repos)
+      GRADUATION_NOTES_ENGINE_BIN:
+        default: ''
+        required: false
+        type: string
       ENABLE_SLACK_NOTIFICATION:
         default: true
         required: false
@@ -234,6 +248,15 @@ jobs:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
           NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
           YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+
+      # Runs only after the graduating publish: lerna leaves those release bodies empty.
+      - name: Aggregate graduated release notes
+        if: github.ref == 'refs/heads/main' && inputs.IS_MONOREPO && inputs.ENABLE_GRADUATION_NOTES
+        uses: reside-eng/workflow-templates-library/.github/actions/graduation-notes@v1
+        with:
+          github-token: ${{ steps.get-workflow-token.outputs.token }}
+          engine-spec: ${{ inputs.GRADUATION_NOTES_SPEC }}
+          engine-bin: ${{ inputs.GRADUATION_NOTES_ENGINE_BIN }}
 
       - name: CI Analytics
         if: always()
