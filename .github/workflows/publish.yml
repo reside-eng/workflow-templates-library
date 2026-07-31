@@ -78,9 +78,10 @@ jobs:
         # https://github.com/reside-eng/workflow-templates-library/branches
         if: steps.semantic.outputs.new_release_published == 'true'
         env:
-          GITHUB_TOKEN: ${{ steps.alias-token.outputs.token }}
+          # App installation token, NOT the built-in Actions token - named accordingly
+          ALIAS_PUSH_TOKEN: ${{ steps.alias-token.outputs.token }}
         run: |
-          git push https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git HEAD:refs/heads/v${{steps.semantic.outputs.new_release_major_version}}
+          git push https://x-access-token:${ALIAS_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git HEAD:refs/heads/v${{steps.semantic.outputs.new_release_major_version}}
 
   notification:
     if: always()
