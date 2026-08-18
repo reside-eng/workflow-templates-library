@@ -117,7 +117,7 @@ jobs:
           claude_code_oauth_token: ${{ vars.USE_CLAUDE_CODE_OAUTH_TOKEN == 'true' && secrets.CLAUDE_CODE_OAUTH_TOKEN || '' }}
           settings: ${{ runner.temp }}/claude-settings.json
           claude_args: |
-            --model claude-opus-4-6
+            --model claude-opus-4-8
             --max-turns 40
             --mcp-config '${{ steps.mcp.outputs.config }}'
             --allowedTools "Bash,Write,Edit,WebSearch,WebFetch,Skill,mcp__atlassian__*"
