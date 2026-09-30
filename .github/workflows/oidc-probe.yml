@@ -1,0 +1,68 @@
+# TEMPORARY - npm Trusted Publishing PoC probe. Delete before merging this branch.
+# Answers, without publishing anything:
+#   1. does a job of a same-org reusable workflow get an OIDC token when only the CALLED workflow
+#      declares `id-token: write`? (the PoC caller deliberately grants nothing)
+#   2. which claims npm matches (repository / workflow_ref / job_workflow_ref / environment)
+#   3. once `npm trust` is configured for PACKAGE: does the registry accept the exchange?
+name: OIDC probe
+
+on:
+  workflow_call:
+    inputs:
+      PACKAGE:
+        description: npm package name to test the registry token exchange against (nothing is published)
+        default: ''
+        required: false
+        type: string
+
+jobs:
+  probe:
+    name: oidc-probe
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Request and decode the GitHub OIDC token (npm audience)
+        run: |
+          if [ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" ]; then
+            echo "::error::No id-token permission in this job: the caller has to grant id-token: write"
+            exit 1
+          fi
+          response=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")
+          token=$(echo "$response" | jq -r .value)
+          echo "::add-mask::$token"
+          echo "$token" | cut -d. -f2 | node -e '
+            let b = "";
+            process.stdin.on("data", (d) => (b += d)).on("end", () => {
+              const c = JSON.parse(Buffer.from(b.trim(), "base64url").toString());
+              const keep = ["iss", "aud", "sub", "repository", "repository_owner", "repository_visibility",
+                "workflow", "workflow_ref", "job_workflow_ref", "ref", "event_name", "environment", "runner_environment"];
+              console.log(JSON.stringify(Object.fromEntries(keep.filter((k) => k in c).map((k) => [k, c[k]])), null, 2));
+            });'
+
+      - name: Try the npm registry token exchange (nothing is published)
+        if: inputs.PACKAGE != ''
+        continue-on-error: true
+        env:
+          PACKAGE: ${{ inputs.PACKAGE }}
+        run: |
+          response=$(curl -sS -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm:registry.npmjs.org")
+          token=$(echo "$response" | jq -r .value)
+          echo "::add-mask::$token"
+          escaped=$(printf '%s' "$PACKAGE" | sed 's#/#%2f#')
+          status=$(curl -sS -o /tmp/exchange.json -w '%{http_code}' -X POST \
+            -H "Authorization: Bearer $token" \
+            "https://registry.npmjs.org/-/npm/v1/oidc/token/exchange/package/$escaped")
+          # /tmp/exchange.json holds a short-lived publish token on success: only the message is ever printed
+          message=$(jq -r '.message // "token received"' /tmp/exchange.json 2>/dev/null || echo "unparseable body")
+          rm -f /tmp/exchange.json
+          if [ "$status" = "200" ]; then
+            echo "::notice::npm trusted publisher OK for $PACKAGE (HTTP 200)"
+          else
+            echo "::warning::npm token exchange for $PACKAGE failed: HTTP $status - $message (no trusted publisher configured yet?)"
+            exit 1
+          fi
