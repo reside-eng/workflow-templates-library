@@ -61,15 +61,15 @@ on:
         default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
-      # npm Trusted Publishing (OIDC) is always attempted first; when a package has no trusted publisher yet,
-      # NPM_PUBLISH_TOKEN is used instead. Set to false once every package of the repo has one.
+      # Escape hatch for a repo whose package has no npm trusted publisher yet: publish with NPM_PUBLISH_TOKEN
+      # when the OIDC exchange is refused. Every @side package is on trusted publishing, so this is off.
       ENABLE_NPM_TOKEN_FALLBACK:
-        default: true
+        default: false
         required: false
         type: boolean
 
     secrets:
-      # Only used while ENABLE_NPM_TOKEN_FALLBACK is true (transition to npm Trusted Publishing)
+      # Only used when ENABLE_NPM_TOKEN_FALLBACK is true
       NPM_PUBLISH_TOKEN:
         required: false
       NPM_READ_TOKEN:
