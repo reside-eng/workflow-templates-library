@@ -61,10 +61,17 @@ on:
         default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
+      # npm Trusted Publishing (OIDC) is always attempted first; when a package has no trusted publisher yet,
+      # NPM_PUBLISH_TOKEN is used instead. Set to false once every package of the repo has one.
+      ENABLE_NPM_TOKEN_FALLBACK:
+        default: true
+        required: false
+        type: boolean
 
     secrets:
+      # Only used while ENABLE_NPM_TOKEN_FALLBACK is true (transition to npm Trusted Publishing)
       NPM_PUBLISH_TOKEN:
-        required: true
+        required: false
       NPM_READ_TOKEN:
         required: true
       LIBRARY_CI_SERVICE_ACCOUNT:
@@ -87,10 +94,19 @@ env:
 jobs:
   release:
     name: release
+    # npm Trusted Publishing only accepts OIDC tokens minted on GitHub-hosted runners
     runs-on: ubuntu-latest
     timeout-minutes: ${{ inputs.TIMEOUT }}
+    permissions:
+      contents: write # tags, GitHub releases, gh-pages
+      issues: write # @semantic-release/github released labels
+      pull-requests: write # @semantic-release/github released labels
+      actions: read # ci-analytics reads the run's jobs
+      id-token: write # npm Trusted Publishing (OIDC)
     env:
       SERVICE_NAME: ${{ github.event.repository.name }}
+      # Token written to .npmrc and handed to Lerna. OIDC takes precedence whenever a trusted publisher exists.
+      NPM_AUTH_TOKEN: ${{ (inputs.ENABLE_NPM_TOKEN_FALLBACK && secrets.NPM_PUBLISH_TOKEN) || secrets.NPM_READ_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -103,11 +119,24 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
+          # Never add registry-url here: setup-node < v7 then exports a dummy NODE_AUTH_TOKEN that breaks OIDC publishing
+
+      # `npm publish` does the OIDC exchange from npm 11.5.1 (bundled with Node >= 24.5; Node 20/22 ship npm 10).
+      # Pinned to the 11 line because npm 12 dropped Node 20.
+      - name: Ensure npm >= 11.5.1
+        run: |
+          required=11.5.1
+          current=$(npm --version)
+          if [ "$(printf '%s\n' "$required" "$current" | sort -V | head -n1)" != "$required" ]; then
+            npm install -g npm@11
+          fi
+          echo "npm $(npm --version)"
 
       - name: Configure Package Manager
         run: |
-          echo Configuring NPM_TOKEN globally for .npmrc
-          npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_PUBLISH_TOKEN }}
+          echo Configuring the npm auth token globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_AUTH_TOKEN"
+          # Validates that token only: npm whoami never reflects OIDC authentication
           npm whoami
 
       - name: Install dependencies with Yarn-Berry
@@ -206,6 +235,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # Migration evidence: "GitHub Actions <npm-oidc-no-reply@github.com>" means the version went through
+      # trusted publishing; the npm user name means the NPM_PUBLISH_TOKEN fallback was used.
+      - name: Report npm publisher of the new version
+        if: inputs.IS_MONOREPO == false && steps.semantic.outputs.new_release_published == 'true'
+        continue-on-error: true
+        run: |
+          pkg=$(jq -r .name package.json)
+          echo "$pkg@$NEW_VERSION published by: $(npm view "$pkg@$NEW_VERSION" _npmUser)"
+        env:
+          NEW_VERSION: ${{ steps.semantic.outputs.new_release_version }}
+
       - name: Get Token
         if: inputs.IS_MONOREPO
         id: get-workflow-token
@@ -236,8 +276,8 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          NPM_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
 
       - name: Publish to a prerelease dist-tag
         if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
@@ -246,8 +286,8 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          NPM_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
-          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
+          NPM_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
 
       # Runs only after the graduating publish: lerna leaves those release bodies empty.
       - name: Aggregate graduated release notes

@@ -30,7 +30,7 @@ Templates for Side librairies github actions
 | LIBRARY_CI_SERVICE_ACCOUNT | `true` |
 | PERCY_TOKEN | `false` (required when `ENABLE_VISUAL_TESTING=true`) |
 
-## verify_library
+## release_library
 
 ### Inputs
 
@@ -45,12 +45,13 @@ Templates for Side librairies github actions
 | IS_MONOREPO | boolean | false | `false` |
 | ENABLE_SLACK_NOTIFICATION | boolean | true | `false` |
 | SLACK_NOTIFICATION_SECRET | string | SLACK_WEBHOOK_PLATFORM_NONPROD | `false` |
+| ENABLE_NPM_TOKEN_FALLBACK | boolean | true | `false` |
 
 ### Secrets
 
 | Secret | Required |
 | ---------------------- | ---------------------- |
-| NPM_PUBLISH_TOKEN | `true` |
+| NPM_PUBLISH_TOKEN | `false` (fallback while `ENABLE_NPM_TOKEN_FALLBACK=true`, see below) |
 | NPM_READ_TOKEN | `true` |
 | LIBRARY_CI_SERVICE_ACCOUNT | `true` |
 | SIDE_CI_APPLICATION_ID | `false` (required when `IS_MONOREPO=true`) |
@@ -80,4 +81,29 @@ assert the notes actually published.
 The aggregation engine (`@side/graduation-notes`) is installed at release time. **Until it is
 published the step warns and skips**, leaving releases exactly as Lerna produced them. Set
 `ENABLE_GRADUATION_NOTES: false` to opt out entirely.
+
+### npm Trusted Publishing (OIDC)
+
+Packages are published with [npm Trusted Publishing](https://docs.npmjs.com/trusted-publishers/):
+`npm publish` (semantic-release) and `lerna publish` (Lerna >= 9) exchange the job's GitHub OIDC token
+for a short-lived npm token, so no long-lived publish token is needed. The `release` job declares
+`id-token: write` itself; callers keep `secrets: inherit` and need no change.
+
+Per package, a trusted publisher must exist on npmjs.com pointing at the **calling** repository and the
+**calling** workflow file (the file in the library repo that `uses:` this workflow, e.g. `release.yml`),
+with no environment. One-off setup by a maintainer with 2FA (npm >= 11.15):
+
+```bash
+npm trust github @side/<package> --repo reside-eng/<repo> --file release.yml --allow-publish
+```
+
+Until every package of a repo has a trusted publisher, leave `ENABLE_NPM_TOKEN_FALLBACK` at `true`:
+OIDC is attempted first and `NPM_PUBLISH_TOKEN` is used only when the registry refuses the exchange.
+The `Report npm publisher of the new version` step shows which path was used
+(`GitHub Actions <npm-oidc-no-reply@github.com>` = OIDC). Then set the input to `false`; the job
+still needs `NPM_READ_TOKEN` to install private `@side/*` dependencies.
+
+Constraints: GitHub-hosted runners only (`ubuntu-latest`), npm >= 11.5.1 (installed by the job when
+the Node line ships an older npm), and the package's `repository.url` must match the GitHub repo.
+A brand-new package has to be published once with a token before a trusted publisher can be added.
 
