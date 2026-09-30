@@ -60,8 +60,9 @@ jobs:
           # /tmp/exchange.json holds a short-lived publish token on success: only the message is ever printed
           message=$(jq -r '.message // "token received"' /tmp/exchange.json 2>/dev/null || echo "unparseable body")
           rm -f /tmp/exchange.json
-          if [ "$status" = "200" ]; then
-            echo "::notice::npm trusted publisher OK for $PACKAGE (HTTP 200)"
+          case "$status" in 2??) ok=1 ;; *) ok=0 ;; esac
+          if [ "$ok" = 1 ]; then
+            echo "::notice::npm trusted publisher OK for $PACKAGE (HTTP $status, token received)"
           else
             echo "::warning::npm token exchange for $PACKAGE failed: HTTP $status - $message (no trusted publisher configured yet?)"
             exit 1
