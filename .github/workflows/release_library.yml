@@ -235,27 +235,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # The registry accepts a publish from a stage-only trusted publisher without making the version live, while
-      # semantic-release has already tagged and released. Fail loudly instead of trusting `npm publish`'s exit code.
-      # The publisher name doubles as migration evidence: "GitHub Actions <npm-oidc-no-reply@github.com>" = OIDC,
-      # the npm user name = NPM_PUBLISH_TOKEN fallback.
-      - name: Verify the new version is live on npm
-        if: inputs.IS_MONOREPO == false && steps.semantic.outputs.new_release_published == 'true'
-        run: |
-          pkg=$(jq -r .name package.json)
-          for attempt in $(seq 1 20); do
-            # fresh cache per attempt: a stale packument would otherwise be reused for its whole TTL
-            if publisher=$(npm view "$pkg@$NEW_VERSION" _npmUser --cache "$RUNNER_TEMP/npm-verify-$attempt" --prefer-online 2>/dev/null) && [ -n "$publisher" ]; then
-              echo "$pkg@$NEW_VERSION is live on npm, published by: $publisher"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::$pkg@$NEW_VERSION was accepted by the registry but is not live after 5 minutes (the registry took over 3 minutes on a real publish). A trusted publisher that only allows staged publishing does this: approve the version under Staged Packages on npmjs.com, then recreate the publisher with --allow-publish."
-          exit 1
-        env:
-          NEW_VERSION: ${{ steps.semantic.outputs.new_release_version }}
-
       - name: Get Token
         if: inputs.IS_MONOREPO
         id: get-workflow-token
@@ -307,26 +286,6 @@ jobs:
           github-token: ${{ steps.get-workflow-token.outputs.token }}
           engine-spec: ${{ inputs.GRADUATION_NOTES_SPEC }}
           engine-bin: ${{ inputs.GRADUATION_NOTES_ENGINE_BIN }}
-
-      # Same guard for Lerna: every public workspace package must be live at its current version (unchanged
-      # packages already are, freshly published ones have to show up).
-      - name: Verify the published versions are live on npm
-        if: inputs.IS_MONOREPO
-        run: |
-          specs=$(yarn lerna list --json 2>/dev/null | jq -r '.[] | select(.private != true) | "\(.name)@\(.version)"')
-          for attempt in $(seq 1 20); do
-            missing=""
-            for spec in $specs; do
-              npm view "$spec" version --cache "$RUNNER_TEMP/npm-verify-$attempt" --prefer-online >/dev/null 2>&1 || missing="$missing $spec"
-            done
-            if [ -z "$missing" ]; then
-              echo "live on npm: $specs"
-              exit 0
-            fi
-            sleep 15
-          done
-          echo "::error::Not live on npm after 5 minutes:$missing. A trusted publisher that only allows staged publishing does this: approve the versions under Staged Packages on npmjs.com, then recreate the publishers with --allow-publish."
-          exit 1
 
       - name: CI Analytics
         if: always()

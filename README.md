@@ -98,10 +98,10 @@ npm trust github @side/<package> --repo reside-eng/<repo> --file release.yml --a
 ```
 
 `--allow-publish` matters: configurations created since 2026-09-03 only allow *staged* publishing by
-default, and the registry then accepts `npm publish` without the version ever going live. Check with
-`npm trust list @side/<package>` that the configuration allows publish. The workflow fails the release
-when a version it published is not visible on the registry within five minutes (the `Verify ... live on
-npm` steps), which also logs the publisher: `GitHub Actions <npm-oidc-no-reply@github.com>` = OIDC.
+default, and the registry then accepts `npm publish` without the version ever going live. Check once with
+`npm trust list @side/<package>` that the configuration lists `publish`. Which path published a version is
+visible on the registry: `npm view @side/<package>@<version> _npmUser` prints
+`GitHub Actions <npm-oidc-no-reply@github.com>` for OIDC and the npm user name for the token fallback.
 
 Until every package of a repo has a trusted publisher, leave `ENABLE_NPM_TOKEN_FALLBACK` at `true`:
 OIDC is attempted first and `NPM_PUBLISH_TOKEN` is used only when the registry refuses the exchange.
