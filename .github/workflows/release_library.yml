@@ -243,7 +243,7 @@ jobs:
         if: inputs.IS_MONOREPO == false && steps.semantic.outputs.new_release_published == 'true'
         run: |
           pkg=$(jq -r .name package.json)
-          for attempt in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             if publisher=$(npm view "$pkg@$NEW_VERSION" _npmUser 2>/dev/null) && [ -n "$publisher" ]; then
               echo "$pkg@$NEW_VERSION is live on npm, published by: $publisher"
               exit 0
@@ -313,13 +313,13 @@ jobs:
         if: inputs.IS_MONOREPO
         run: |
           specs=$(yarn lerna list --json 2>/dev/null | jq -r '.[] | select(.private != true) | "\(.name)@\(.version)"')
-          for attempt in $(seq 1 12); do
+          for _ in $(seq 1 12); do
             missing=""
             for spec in $specs; do
               npm view "$spec" version >/dev/null 2>&1 || missing="$missing $spec"
             done
             if [ -z "$missing" ]; then
-              echo "live on npm:" $specs
+              echo "live on npm: $specs"
               exit 0
             fi
             sleep 10
