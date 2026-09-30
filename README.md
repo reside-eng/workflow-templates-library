@@ -97,11 +97,16 @@ with no environment. One-off setup by a maintainer with 2FA (npm >= 11.15):
 npm trust github @side/<package> --repo reside-eng/<repo> --file release.yml --allow-publish
 ```
 
+`--allow-publish` matters: configurations created since 2026-09-03 only allow *staged* publishing by
+default, and the registry then accepts `npm publish` without the version ever going live. Check with
+`npm trust list @side/<package>` that the configuration allows publish. The workflow fails the release
+when a version it published is not visible on the registry within two minutes (the `Verify ... live on
+npm` steps), which also logs the publisher: `GitHub Actions <npm-oidc-no-reply@github.com>` = OIDC.
+
 Until every package of a repo has a trusted publisher, leave `ENABLE_NPM_TOKEN_FALLBACK` at `true`:
 OIDC is attempted first and `NPM_PUBLISH_TOKEN` is used only when the registry refuses the exchange.
-The `Report npm publisher of the new version` step shows which path was used
-(`GitHub Actions <npm-oidc-no-reply@github.com>` = OIDC). Then set the input to `false`; the job
-still needs `NPM_READ_TOKEN` to install private `@side/*` dependencies.
+Then set the input to `false`; the job still needs `NPM_READ_TOKEN` to install private `@side/*`
+dependencies.
 
 Constraints: GitHub-hosted runners only (`ubuntu-latest`), npm >= 11.5.1 (installed by the job when
 the Node line ships an older npm), and the package's `repository.url` must match the GitHub repo.
