@@ -243,14 +243,15 @@ jobs:
         if: inputs.IS_MONOREPO == false && steps.semantic.outputs.new_release_published == 'true'
         run: |
           pkg=$(jq -r .name package.json)
-          for _ in $(seq 1 12); do
-            if publisher=$(npm view "$pkg@$NEW_VERSION" _npmUser 2>/dev/null) && [ -n "$publisher" ]; then
+          for attempt in $(seq 1 20); do
+            # fresh cache per attempt: a stale packument would otherwise be reused for its whole TTL
+            if publisher=$(npm view "$pkg@$NEW_VERSION" _npmUser --cache "$RUNNER_TEMP/npm-verify-$attempt" --prefer-online 2>/dev/null) && [ -n "$publisher" ]; then
               echo "$pkg@$NEW_VERSION is live on npm, published by: $publisher"
               exit 0
             fi
-            sleep 10
+            sleep 15
           done
-          echo "::error::$pkg@$NEW_VERSION was accepted by the registry but is not live after 2 minutes. A trusted publisher that only allows staged publishing does this: approve the version under Staged Packages on npmjs.com, then recreate the publisher with --allow-publish."
+          echo "::error::$pkg@$NEW_VERSION was accepted by the registry but is not live after 5 minutes (the registry took over 3 minutes on a real publish). A trusted publisher that only allows staged publishing does this: approve the version under Staged Packages on npmjs.com, then recreate the publisher with --allow-publish."
           exit 1
         env:
           NEW_VERSION: ${{ steps.semantic.outputs.new_release_version }}
@@ -313,18 +314,18 @@ jobs:
         if: inputs.IS_MONOREPO
         run: |
           specs=$(yarn lerna list --json 2>/dev/null | jq -r '.[] | select(.private != true) | "\(.name)@\(.version)"')
-          for _ in $(seq 1 12); do
+          for attempt in $(seq 1 20); do
             missing=""
             for spec in $specs; do
-              npm view "$spec" version >/dev/null 2>&1 || missing="$missing $spec"
+              npm view "$spec" version --cache "$RUNNER_TEMP/npm-verify-$attempt" --prefer-online >/dev/null 2>&1 || missing="$missing $spec"
             done
             if [ -z "$missing" ]; then
               echo "live on npm: $specs"
               exit 0
             fi
-            sleep 10
+            sleep 15
           done
-          echo "::error::Not live on npm after 2 minutes:$missing. A trusted publisher that only allows staged publishing does this: approve the versions under Staged Packages on npmjs.com, then recreate the publishers with --allow-publish."
+          echo "::error::Not live on npm after 5 minutes:$missing. A trusted publisher that only allows staged publishing does this: approve the versions under Staged Packages on npmjs.com, then recreate the publishers with --allow-publish."
           exit 1
 
       - name: CI Analytics
