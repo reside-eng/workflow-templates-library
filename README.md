@@ -87,24 +87,43 @@ Packages are published with [npm Trusted Publishing](https://docs.npmjs.com/trus
 for a short-lived npm token, so no long-lived publish token is needed. The `release` job declares
 `id-token: write` itself; callers keep `secrets: inherit` and need no change.
 
-Per package, a trusted publisher must exist on npmjs.com pointing at the **calling** repository and the
+Each package needs a trusted publisher on npmjs.com pointing at the **calling** repository and the
 **calling** workflow file (the file in the library repo that `uses:` this workflow, e.g. `release.yml`),
-with no environment. One-off setup by a maintainer with 2FA (npm >= 11.15):
+with no environment. `npm view @side/<package>@<version> _npmUser` shows who published a version:
+`GitHub Actions <npm-oidc-no-reply@github.com>` for CI, the npm user name for a manual publish.
 
-```bash
-npm trust github @side/<package> --repo reside-eng/<repo> --file release.yml --allow-publish
-```
+#### First release of a new package
 
-`--allow-publish` matters: configurations created since 2026-09-03 only allow *staged* publishing by
-default, and the registry then accepts `npm publish` without the version ever going live. Check once with
-`npm trust list @side/<package>` that the configuration lists `publish`. Which path published a version is
-visible on the registry: `npm view @side/<package>@<version> _npmUser` prints
-`GitHub Actions <npm-oidc-no-reply@github.com>` for OIDC and the npm user name for the token fallback.
+The release can only publish a package that already exists on npm and has a trusted publisher. A new
+package needs the steps below once, before its first release: before merging the PR that adds it to a
+Lerna monorepo, or before enabling the release workflow of a new repository. Use an npm account with 2FA
+and write access to `@side`; `npm trust` needs npm >= 11.15, hence `npx`.
+
+1. Build it the way CI does: `yarn build` in a single-package repository,
+   `yarn lerna run build --scope @side/<name>` in a monorepo.
+1. From the directory that gets published (`packages/<name>` in a monorepo, otherwise the `pkgRoot` of
+   `release.config.js` when set, otherwise the repository root), publish the current version as a
+   placeholder:
+
+   ```bash
+   npx -y npm@11 publish --access restricted
+   ```
+
+1. Attach the trusted publisher. Keep `--allow-publish`: without it, npm only stages the publishes and
+   they never go live.
+
+   ```bash
+   npx -y npm@11 trust github @side/<name> --repo reside-eng/<repo> --file release.yml --allow-publish
+   ```
+
+1. Check that `npx -y npm@11 trust list @side/<name>` lists `publish` in `permissions`.
+
+The next release then publishes the real version through OIDC. Without these steps that release fails
+with `E403` after it has already pushed its git tags.
 
 The job still needs `NPM_READ_TOKEN`: it installs the private `@side/*` dependencies, and trusted
 publishing covers `npm publish` only.
 
 Constraints: GitHub-hosted runners only (`ubuntu-latest`), npm >= 11.5.1 (installed by the job when
 the Node line ships an older npm), and the package's `repository.url` must match the GitHub repo.
-A brand-new package has to be published once with a token before a trusted publisher can be added.
 
