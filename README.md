@@ -45,13 +45,11 @@ Templates for Side librairies github actions
 | IS_MONOREPO | boolean | false | `false` |
 | ENABLE_SLACK_NOTIFICATION | boolean | true | `false` |
 | SLACK_NOTIFICATION_SECRET | string | SLACK_WEBHOOK_PLATFORM_NONPROD | `false` |
-| ENABLE_NPM_TOKEN_FALLBACK | boolean | false | `false` |
 
 ### Secrets
 
 | Secret | Required |
 | ---------------------- | ---------------------- |
-| NPM_PUBLISH_TOKEN | `false` (only with `ENABLE_NPM_TOKEN_FALLBACK=true`, see below) |
 | NPM_READ_TOKEN | `true` |
 | LIBRARY_CI_SERVICE_ACCOUNT | `true` |
 | SIDE_CI_APPLICATION_ID | `false` (required when `IS_MONOREPO=true`) |
@@ -103,9 +101,8 @@ default, and the registry then accepts `npm publish` without the version ever go
 visible on the registry: `npm view @side/<package>@<version> _npmUser` prints
 `GitHub Actions <npm-oidc-no-reply@github.com>` for OIDC and the npm user name for the token fallback.
 
-`ENABLE_NPM_TOKEN_FALLBACK: true` is the escape hatch for a repo whose package has no trusted publisher
-yet: OIDC is still attempted first and `NPM_PUBLISH_TOKEN` is used only when the registry refuses the
-exchange. The job always needs `NPM_READ_TOKEN` to install private `@side/*` dependencies.
+The job still needs `NPM_READ_TOKEN`: it installs the private `@side/*` dependencies, and trusted
+publishing covers `npm publish` only.
 
 Constraints: GitHub-hosted runners only (`ubuntu-latest`), npm >= 11.5.1 (installed by the job when
 the Node line ships an older npm), and the package's `repository.url` must match the GitHub repo.
