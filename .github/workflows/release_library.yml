@@ -61,17 +61,8 @@ on:
         default: 'SLACK_WEBHOOK_PLATFORM_NONPROD'
         required: false
         type: string
-      # Escape hatch for a repo whose package has no npm trusted publisher yet: publish with NPM_PUBLISH_TOKEN
-      # when the OIDC exchange is refused. Every @side package is on trusted publishing, so this is off.
-      ENABLE_NPM_TOKEN_FALLBACK:
-        default: false
-        required: false
-        type: boolean
 
     secrets:
-      # Only used when ENABLE_NPM_TOKEN_FALLBACK is true
-      NPM_PUBLISH_TOKEN:
-        required: false
       NPM_READ_TOKEN:
         required: true
       LIBRARY_CI_SERVICE_ACCOUNT:
@@ -105,8 +96,6 @@ jobs:
       id-token: write # npm Trusted Publishing (OIDC)
     env:
       SERVICE_NAME: ${{ github.event.repository.name }}
-      # Token written to .npmrc and handed to Lerna. OIDC takes precedence whenever a trusted publisher exists.
-      NPM_AUTH_TOKEN: ${{ (inputs.ENABLE_NPM_TOKEN_FALLBACK && secrets.NPM_PUBLISH_TOKEN) || secrets.NPM_READ_TOKEN }}
     steps:
       - name: Checkout code
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -132,12 +121,15 @@ jobs:
           fi
           echo "npm $(npm --version)"
 
+      # Read token only, for the private @side/* installs: publishing exchanges the job's OIDC token instead
       - name: Configure Package Manager
         run: |
-          echo Configuring the npm auth token globally for .npmrc
-          npm config set '//registry.npmjs.org/:_authToken' "$NPM_AUTH_TOKEN"
+          echo Configuring the npm read token globally for .npmrc
+          npm config set '//registry.npmjs.org/:_authToken' "$NPM_READ_TOKEN"
           # Validates that token only: npm whoami never reflects OIDC authentication
           npm whoami
+        env:
+          NPM_READ_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
 
       - name: Install dependencies with Yarn-Berry
         env:
@@ -265,8 +257,7 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-graduate
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          NPM_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
-          YARN_NPM_AUTH_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
 
       - name: Publish to a prerelease dist-tag
         if: github.ref != 'refs/heads/main' && inputs.IS_MONOREPO
@@ -275,8 +266,7 @@ jobs:
           yarn lerna publish ${{ env.LERNA_DEFAULT_ARGS }} --conventional-prerelease --dist-tag ${GITHUB_REF##*/} --preid ${GITHUB_REF##*/}
         env:
           GH_TOKEN: ${{ steps.get-workflow-token.outputs.token }}
-          NPM_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
-          YARN_NPM_AUTH_TOKEN: ${{ env.NPM_AUTH_TOKEN }}
+          YARN_NPM_AUTH_TOKEN: ${{ secrets.NPM_READ_TOKEN }}
 
       # Runs only after the graduating publish: lerna leaves those release bodies empty.
       - name: Aggregate graduated release notes
