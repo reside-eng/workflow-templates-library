@@ -521,9 +521,20 @@ def sast_debug(ws, image, uid, gid, ctx):
                     "try:\n  r=urllib.request.urlopen('https://semgrep.dev/c/p/nodejs',timeout=20); b=r.read(); print('registry', r.status, len(b), 'bytes')\n"
                     "except Exception as e: print('registry error', repr(e)[:300])"])
     log((r.stdout + r.stderr)[-600:])
-    for label, cfg in (("local-rule", "/action/tests/debug-rule.yml"), ("registry", "p/nodejs")):
-        r = run(base + [image, "semgrep", "scan", "--config", cfg, "--metrics=off", "--json", "--quiet",
-                        "--disable-version-check", *[f"/src/{p}" for p in files]])
+    r = run(base + ["--entrypoint", "/bin/sh", image, "-c",
+                    f"id; git --version; git -C /src log --oneline -3; git -C /src merge-base {ctx['base']} HEAD; "
+                    "git -C /src status --porcelain | head -5; git -C /src rev-parse --is-shallow-repository"])
+    log("git view: " + (r.stdout + r.stderr)[-800:])
+    variants = (
+        ("local-rule", base, ["--config", "/action/tests/debug-rule.yml"]),
+        ("registry", base, ["--config", "p/nodejs"]),
+        ("registry+baseline", base, ["--config", "p/nodejs", "--baseline-commit", ctx["base"], "--verbose"]),
+        ("registry+baseline as root", [a for a in base if a not in (f"{uid}:{gid}", "--user")],
+         ["--config", "p/nodejs", "--baseline-commit", ctx["base"], "--verbose"]),
+    )
+    for label, prefix, extra in variants:
+        r = run(prefix + [image, "semgrep", "scan", *extra, "--metrics=off", "--json", "--disable-version-check",
+                          *[f"/src/{p}" for p in files]])
         try:
             rep = json.loads(r.stdout or "{}")
             log(f"{label}: exit={r.returncode} results={len(rep.get('results') or [])} errors={len(rep.get('errors') or [])} "
@@ -531,6 +542,9 @@ def sast_debug(ws, image, uid, gid, ctx):
                 f"first_error={json.dumps((rep.get('errors') or [{}])[0])[:300]}")
         except json.JSONDecodeError:
             log(f"{label}: exit={r.returncode} non-json output: {(r.stderr or r.stdout)[-500:]}")
+        if "baseline" in label:
+            lines = [l for l in r.stderr.splitlines() if re.search(r"(?i)baseline|stash|checkout|merge.base|worktree|fatal|error", l)]
+            log(f"{label} stderr (baseline-related): " + " | ".join(lines)[-1500:])
     endgroup()
 
 
@@ -561,7 +575,10 @@ def cmd_sast():
         cmd += ["--exclude", pat]
     for rule in excluded_rules:
         cmd += ["--exclude-rule", rule]
-    cmd.append("/src")
+    # Relative target: Semgrep's baseline scan may chdir into a temporary worktree of the base commit
+    # (when the working tree is not clean, e.g. gha-creds-*.json written by the Cloud auth step);
+    # an absolute target would then point back at the head tree and cancel every finding.
+    cmd.append(".")
     group("semgrep")
     log(" ".join(cmd))
     r = run(cmd)
