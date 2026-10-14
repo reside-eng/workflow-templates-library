@@ -123,6 +123,8 @@ runs:
         {
           echo "SCAN_WORKDIR=$workdir"
           echo "SCAN_ACTION_PATH=$ACTION_PATH"
+          echo "SCAN_PROFILE=$SCAN"
+          echo "SCAN_SUFFIX=$SUFFIX"
           echo "SCAN_MODE_SECRETS=$MODE_SECRETS"
           echo "SCAN_MODE_DEPS=$MODE_DEPS"
           echo "SCAN_MODE_SAST=$MODE_SAST"

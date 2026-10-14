@@ -142,6 +142,13 @@ def result(scanner, status, mode=None, **extra):
     return data
 
 
+def comment_marker():
+    """One PR comment per scan profile (code, image per app, workflows)."""
+    tag = env("SCAN_PROFILE", "code")
+    suffix = env("SCAN_SUFFIX", "")
+    return f"<!-- security-scan:{tag}{':' + suffix if suffix else ''} -->"
+
+
 def md_escape(text):
     return str(text).replace("|", "\\|").replace("\n", " ").strip()
 
@@ -519,6 +526,15 @@ def cmd_sast():
     if r.returncode not in (0, 1) or report is None:
         result("sast", "error", mode, error=f"semgrep exited {r.returncode}: {(r.stderr or r.stdout)[-800:]}")
         return
+    paths = report.get("paths") or {}
+    scanned = paths.get("scanned") or []
+    log(f"semgrep exit={r.returncode} scanned={len(scanned)} skipped={len(paths.get('skipped') or [])} "
+        f"errors={len(report.get('errors') or [])} first={scanned[:5]}")
+    if not scanned:
+        probe = run(["docker", "run", "--rm", "--user", f"{uid}:{gid}", "-e", "HOME=/tmp", "-v", f"{ws}:/src", "-w", "/src",
+                     "--entrypoint", "/bin/sh", image, "-c", "ls -a /src | head -20; git -C /src rev-parse HEAD 2>&1 | head -2"])
+        log("::warning title=security-scan/sast::semgrep scanned no files; container view of the workspace:\n"
+            + (probe.stdout + probe.stderr)[-1500:])
     findings = []
     for res in report.get("results") or []:
         path = res.get("path", "")
@@ -688,7 +704,8 @@ def describe(scanner, r):
     g = gate_count(r)
     if scanner == "deps":
         new = sum(1 for x in r["findings"] if x["new"])
-        return f"{new} new ({g} gating), {r.get('existing', 0)} pre-existing"
+        gate_word = "gating" if r.get("mode") == "blocking" else "would gate"
+        return f"{new} new ({g} {gate_word}), {r.get('existing', 0)} pre-existing"
     if scanner == "sast":
         err = sum(1 for x in r["findings"] if x["severity"] == "ERROR")
         return f"{n} new ({err} ERROR, {n - err} WARNING)"
@@ -723,7 +740,10 @@ def cmd_report():
             log(f"::{level} {loc},title={title}::{md_escape(x.get('rule', ''))}: {md_escape(text)[:300]}")
     conclusion = "fail" if failures else ("advisory" if warnings_out else "pass")
 
-    head = f"## Security scan: {conclusion}"
+    profile = env("SCAN_PROFILE", "code")
+    suffix = env("SCAN_SUFFIX", "")
+    label = {"code": "Security scan", "image": "Image scan", "workflows": "Workflow audit"}.get(profile, "Security scan")
+    head = f"## {label}{' ' + suffix if suffix else ''}: {conclusion}"
     if ctx.get("event") == "merge_group":
         head += " (merge queue)"
     lines.append(head)
@@ -774,7 +794,7 @@ def cmd_report():
     art = workdir() / "artifact"
     art.mkdir(parents=True, exist_ok=True)
     save_json(art / "results.json", bundle)
-    comment = "<!-- security-scan -->\n" + summary.replace("## Security scan", "## 🔎 Security scan", 1)
+    comment = comment_marker() + "\n" + summary.replace(f"## {label}", f"## 🔎 {label}", 1)
     (workdir() / "comment.md").write_text(comment)
     set_output("conclusion", conclusion)
     set_output("findings_total", str(total))
@@ -803,8 +823,9 @@ def cmd_comment():
     body = body_path.read_text() if body_path.exists() else ""
     bundle = load_json(workdir() / "artifact" / "results.json", {}) or {}
     has_content = bundle.get("conclusion") in ("fail", "advisory")
+    marker = comment_marker()
     r = gh_api("--paginate", f"repos/{repo}/issues/{pr}/comments", "--jq",
-               '.[] | select(.body | startswith("<!-- security-scan -->")) | .id')
+               f'.[] | select(.body | startswith("{marker}")) | .id')
     existing = [i for i in r.stdout.split() if i.strip()]
     if has_content:
         payload = json.dumps({"body": body[:65000]})
@@ -814,7 +835,7 @@ def cmd_comment():
             res = gh_api("-X", "POST", f"repos/{repo}/issues/{pr}/comments", "--input", "-", input_text=payload)
         log("comment upserted" if res.returncode == 0 else f"comment failed: {res.stderr[-300:]}")
     elif existing:
-        clean = ("<!-- security-scan -->\n## 🔎 Security scan: pass\n\nNo findings on the latest push "
+        clean = (f"{marker}\n## 🔎 Security scan: pass\n\nNo findings on the latest push "
                  f"(`{ctx.get('head', '')[:12]}`).")
         res = gh_api("-X", "PATCH", f"repos/{repo}/issues/comments/{existing[0]}", "--input", "-",
                      input_text=json.dumps({"body": clean}))
