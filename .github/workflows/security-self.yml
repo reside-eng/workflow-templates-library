@@ -21,6 +21,9 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Unit tests (security-scan.py)
+        run: python3 -m unittest discover -s .github/actions/security-scan/tests -v
+
       - name: Workflow audit
         uses: ./.github/actions/security-scan
         with:

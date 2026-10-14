@@ -1,0 +1,7 @@
+# Minimal local rule used by the SCAN_DEBUG probes (no registry access needed).
+rules:
+  - id: debug-eval
+    languages: [javascript, typescript]
+    severity: ERROR
+    message: eval() call (debug rule)
+    pattern: eval(...)

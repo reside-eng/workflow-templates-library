@@ -69,6 +69,10 @@ inputs:
     description: 'Private key of that GitHub App'
     default: ''
     required: false
+  DEBUG:
+    description: 'true prints extra diagnostics (registry reachability, probe scans)'
+    default: 'false'
+    required: false
   GITLEAKS_VERSION:
     default: '8.30.1'
     required: false
@@ -110,6 +114,7 @@ runs:
         ZIZMOR_IMAGE: ${{ inputs.ZIZMOR_IMAGE }}
         GITLEAKS_VERSION: ${{ inputs.GITLEAKS_VERSION }}
         TRIVY_VERSION: ${{ inputs.TRIVY_VERSION }}
+        DEBUG: ${{ inputs.DEBUG }}
       run: |
         workdir="$RUNNER_TEMP/security-scan-$SCAN${SUFFIX:+-$SUFFIX}"
         rm -rf "$workdir" && mkdir -p "$workdir/artifact"
@@ -138,6 +143,7 @@ runs:
           echo "GITLEAKS_VERSION=$GITLEAKS_VERSION"
           echo "TRIVY_VERSION=$TRIVY_VERSION"
           echo "TRIVY_CACHE_DIR=$RUNNER_TEMP/trivy-cache"
+          echo "SCAN_DEBUG=$DEBUG"
         } >> "$GITHUB_ENV"
         echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
         echo "modes: secrets=$MODE_SECRETS deps=$MODE_DEPS sast=$MODE_SAST image=$MODE_IMAGE workflows=$MODE_WORKFLOWS"

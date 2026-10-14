@@ -372,7 +372,7 @@ def validate_trivyignore(path):
     errors, notes = [], []
     yq = shutil.which("yq")
     if not yq:
-        notes.append("`.trivyignore.yaml` present but yq is unavailable: entries not validated")
+        errors.append("`.trivyignore.yaml` present but yq is unavailable on this runner: entries cannot be validated")
         return errors, notes
     r = subprocess.run([yq, "-o=json", "-I=0", ".", str(path)], text=True, capture_output=True)
     if r.returncode != 0:
@@ -421,6 +421,18 @@ def trivy_vulns(report):
     return out
 
 
+def classify_deps(head_v, base_v):
+    """Head findings with new (absent from base), fixable and gate (new and fixable) flags."""
+    findings = []
+    for key in sorted(head_v, key=lambda k: (k[1], k[0])):
+        v = dict(head_v[key])
+        v["new"] = key not in base_v
+        v["fixable"] = bool(v["fixed"])
+        v["gate"] = v["new"] and v["fixable"]
+        findings.append(v)
+    return findings
+
+
 def trivy_cmd(*args):
     return [env("TRIVY_BIN", "trivy"), *args, "--quiet", "--exit-code", "0", "--no-progress", "--format", "json"]
 
@@ -463,14 +475,7 @@ def cmd_deps():
             return
         reports[side] = trivy_vulns(load_json(out, {}))
     endgroup()
-    head_v, base_v = reports["head"], reports["base"]
-    findings = []
-    for key in sorted(head_v, key=lambda k: (k[1], k[0])):
-        v = dict(head_v[key])
-        v["new"] = key not in base_v
-        v["fixable"] = bool(v["fixed"])
-        v["gate"] = v["new"] and v["fixable"]
-        findings.append(v)
+    findings = classify_deps(reports["head"], reports["base"])
     conv = run([env("TRIVY_BIN", "trivy"), "convert", "--format", "sarif", "--output",
                 str(workdir() / "artifact" / "deps.sarif"), str(d / "head.json")])
     if conv.returncode != 0:
@@ -488,6 +493,47 @@ def cmd_deps():
 
 
 # ----------------------------------------------------------------------------- sast
+def semgrep_findings(report):
+    findings = []
+    for res in report.get("results") or []:
+        path = res.get("path", "")
+        path = path[5:] if path.startswith("/src/") else path
+        extra = res.get("extra") or {}
+        sev = extra.get("severity", "WARNING")
+        meta = extra.get("metadata") or {}
+        findings.append({
+            "rule": res.get("check_id"), "severity": sev, "file": path, "line": (res.get("start") or {}).get("line"),
+            "message": (extra.get("message") or "").strip(),
+            "url": meta.get("shortlink") or meta.get("source") or "",
+            "confidence": meta.get("confidence", ""), "gate": sev == "ERROR",
+        })
+    return findings
+
+
+def sast_debug(ws, image, uid, gid, ctx):
+    """Extra probes when SCAN_DEBUG=true: registry reachability, a local rule, the registry without baseline."""
+    files = [p for p in ctx["changed"] if p.endswith(SOURCE_EXTS) and not TEST_PATH_RE.search(p)][:5]
+    base = ["docker", "run", "--rm", "--user", f"{uid}:{gid}", "-e", "HOME=/tmp", "-v", f"{ws}:/src",
+            "-v", f"{action_path()}:/action:ro", "-w", "/src"]
+    group("sast debug")
+    r = run(base + ["--entrypoint", "python3", image, "-c",
+                    "import urllib.request,sys\n"
+                    "try:\n  r=urllib.request.urlopen('https://semgrep.dev/c/p/nodejs',timeout=20); b=r.read(); print('registry', r.status, len(b), 'bytes')\n"
+                    "except Exception as e: print('registry error', repr(e)[:300])"])
+    log((r.stdout + r.stderr)[-600:])
+    for label, cfg in (("local-rule", "/action/tests/debug-rule.yml"), ("registry", "p/nodejs")):
+        r = run(base + [image, "semgrep", "scan", "--config", cfg, "--metrics=off", "--json", "--quiet",
+                        "--disable-version-check", *[f"/src/{p}" for p in files]])
+        try:
+            rep = json.loads(r.stdout or "{}")
+            log(f"{label}: exit={r.returncode} results={len(rep.get('results') or [])} errors={len(rep.get('errors') or [])} "
+                f"scanned={len((rep.get('paths') or {}).get('scanned') or [])} "
+                f"first_error={json.dumps((rep.get('errors') or [{}])[0])[:300]}")
+        except json.JSONDecodeError:
+            log(f"{label}: exit={r.returncode} non-json output: {(r.stderr or r.stdout)[-500:]}")
+    endgroup()
+
+
 def cmd_sast():
     ctx = load_ctx()
     mode = ctx["modes"]["sast"]
@@ -535,18 +581,9 @@ def cmd_sast():
                      "--entrypoint", "/bin/sh", image, "-c", "ls -a /src | head -20; git -C /src rev-parse HEAD 2>&1 | head -2"])
         log("::warning title=security-scan/sast::semgrep scanned no files; container view of the workspace:\n"
             + (probe.stdout + probe.stderr)[-1500:])
-    findings = []
-    for res in report.get("results") or []:
-        path = res.get("path", "")
-        path = path[5:] if path.startswith("/src/") else path
-        sev = (res.get("extra") or {}).get("severity", "WARNING")
-        meta = (res.get("extra") or {}).get("metadata") or {}
-        findings.append({
-            "rule": res.get("check_id"), "severity": sev, "file": path, "line": (res.get("start") or {}).get("line"),
-            "message": (res.get("extra") or {}).get("message", "").strip(),
-            "url": meta.get("shortlink") or meta.get("source") or "",
-            "confidence": meta.get("confidence", ""), "gate": sev == "ERROR",
-        })
+    if env("SCAN_DEBUG") == "true":
+        sast_debug(ws, image, uid, gid, ctx)
+    findings = semgrep_findings(report)
     errors = report.get("errors") or []
     if (out_dir / "semgrep.sarif").exists():
         shutil.copy(out_dir / "semgrep.sarif", workdir() / "artifact" / "sast.sarif")
@@ -597,6 +634,28 @@ def cmd_image():
 
 
 # ----------------------------------------------------------------------------- workflows
+def zizmor_findings(raw, changed):
+    """zizmor JSON findings restricted to the changed files; High/Critical gate."""
+    findings = []
+    for f in raw:
+        locs = f.get("locations") or []
+        loc = locs[0] if locs else {}
+        key = ((loc.get("symbolic") or {}).get("key") or {}).get("Local") or {}
+        path = key.get("verbatim_path") or key.get("path") or ""
+        path = path[5:] if path.startswith("/src/") else path
+        if path not in changed:
+            continue
+        line = (((loc.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row")
+        det = f.get("determinations") or {}
+        findings.append({
+            "rule": f.get("ident"), "severity": det.get("severity"), "confidence": det.get("confidence"),
+            "file": path, "line": (line + 1) if isinstance(line, int) else None,
+            "message": f.get("desc", ""), "url": f.get("url", ""),
+            "gate": det.get("severity") in ("High", "Critical"),
+        })
+    return findings
+
+
 def cmd_workflows():
     ctx = load_ctx()
     mode = ctx["modes"]["workflows"]
@@ -621,24 +680,7 @@ def cmd_workflows():
     except json.JSONDecodeError:
         result("workflows", "error", mode, error=f"zizmor exited {r.returncode}: {(r.stderr or r.stdout)[-800:]}")
         return
-    changed = set(ctx["changed"])
-    findings = []
-    for f in raw:
-        locs = f.get("locations") or []
-        loc = locs[0] if locs else {}
-        key = ((loc.get("symbolic") or {}).get("key") or {}).get("Local") or {}
-        path = key.get("verbatim_path") or key.get("path") or ""
-        path = path[5:] if path.startswith("/src/") else path
-        if path not in changed:
-            continue
-        line = (((loc.get("concrete") or {}).get("location") or {}).get("start_point") or {}).get("row")
-        det = f.get("determinations") or {}
-        findings.append({
-            "rule": f.get("ident"), "severity": det.get("severity"), "confidence": det.get("confidence"),
-            "file": path, "line": (line + 1) if isinstance(line, int) else None,
-            "message": f.get("desc", ""), "url": f.get("url", ""),
-            "gate": det.get("severity") in ("High", "Critical"),
-        })
+    findings = zizmor_findings(raw, set(ctx["changed"]))
     result("workflows", "findings" if findings else "clean", mode, findings=findings,
            total_in_repo=len(raw), tool_version=image.split("@")[0].rsplit(":", 1)[-1])
 
