@@ -1,0 +1,268 @@
+name: 'Security scan'
+description: 'Deterministic security scanners (gitleaks, Trivy, Semgrep, zizmor) in advisory or blocking mode. Policies: docs/security-scanners.md'
+inputs:
+  SCAN:
+    description: 'What to scan: code (secrets, dependencies, SAST), image (built container image) or workflows (GitHub workflow files)'
+    default: 'code'
+    required: false
+  MODE_SECRETS:
+    description: 'off | advisory | blocking'
+    default: 'off'
+    required: false
+  MODE_DEPS:
+    description: 'off | advisory | blocking'
+    default: 'off'
+    required: false
+  MODE_SAST:
+    description: 'off | advisory | blocking'
+    default: 'off'
+    required: false
+  MODE_IMAGE:
+    description: 'off | advisory | blocking'
+    default: 'off'
+    required: false
+  MODE_WORKFLOWS:
+    description: 'off | advisory | blocking'
+    default: 'off'
+    required: false
+  IMAGE:
+    description: 'Image reference to scan when SCAN is image'
+    default: ''
+    required: false
+  BASE_SHA:
+    description: 'Base commit for diff-aware scans (default: first parent of HEAD)'
+    default: ''
+    required: false
+  PR_NUMBER:
+    description: 'Pull request number for the PR comment (default: from the event payload)'
+    default: ''
+    required: false
+  DOCKER_OAT:
+    description: 'Docker Hub token used to pull the Semgrep image'
+    default: ''
+    required: false
+  SELF_HOSTED_RUNNER:
+    description: 'true on self-hosted runners (selects the Cloud Storage cache for the Trivy database)'
+    default: 'false'
+    required: false
+  RESULTS_BUCKET:
+    description: 'Cloud Storage bucket receiving results.json for the false-positive review (empty disables the upload)'
+    default: 'reside-stage-plat-tools'
+    required: false
+  PR_COMMENT:
+    description: 'Upsert a PR comment when there are findings'
+    default: 'true'
+    required: false
+  ARTIFACT_SUFFIX:
+    description: 'Suffix for the artifact and results names (matrix jobs)'
+    default: ''
+    required: false
+  GITHUB_TOKEN:
+    description: 'Token for the PR comment'
+    default: ${{ github.token }}
+    required: false
+  REVIEW_REQUEST_APP_ID:
+    description: 'GitHub App id used to request a devops review when allow-list files change'
+    default: ''
+    required: false
+  REVIEW_REQUEST_APP_PRIVATE_KEY:
+    description: 'Private key of that GitHub App'
+    default: ''
+    required: false
+  GITLEAKS_VERSION:
+    default: '8.30.1'
+    required: false
+  TRIVY_VERSION:
+    default: '0.76.0'
+    required: false
+  SEMGREP_IMAGE:
+    default: 'semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b'
+    required: false
+  ZIZMOR_IMAGE:
+    default: 'ghcr.io/zizmorcore/zizmor:1.30.1@sha256:a2eb396d886c053073405c7a980f2139ba2248ec172243cfa3841e57196e8101'
+    required: false
+outputs:
+  conclusion:
+    description: 'pass | advisory | fail'
+    value: ${{ steps.report.outputs.conclusion }}
+  findings_total:
+    description: 'Number of findings across scanners'
+    value: ${{ steps.report.outputs.findings_total }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Prepare
+      id: prepare
+      shell: bash
+      env:
+        SCAN: ${{ inputs.SCAN }}
+        SUFFIX: ${{ inputs.ARTIFACT_SUFFIX }}
+        MODE_SECRETS: ${{ inputs.MODE_SECRETS }}
+        MODE_DEPS: ${{ inputs.MODE_DEPS }}
+        MODE_SAST: ${{ inputs.MODE_SAST }}
+        MODE_IMAGE: ${{ inputs.MODE_IMAGE }}
+        MODE_WORKFLOWS: ${{ inputs.MODE_WORKFLOWS }}
+        ACTION_PATH: ${{ github.action_path }}
+        BASE_SHA: ${{ inputs.BASE_SHA }}
+        PR_NUMBER: ${{ inputs.PR_NUMBER }}
+        IMAGE: ${{ inputs.IMAGE }}
+        SEMGREP_IMAGE: ${{ inputs.SEMGREP_IMAGE }}
+        ZIZMOR_IMAGE: ${{ inputs.ZIZMOR_IMAGE }}
+        GITLEAKS_VERSION: ${{ inputs.GITLEAKS_VERSION }}
+        TRIVY_VERSION: ${{ inputs.TRIVY_VERSION }}
+      run: |
+        workdir="$RUNNER_TEMP/security-scan-$SCAN${SUFFIX:+-$SUFFIX}"
+        rm -rf "$workdir" && mkdir -p "$workdir/artifact"
+        # Only the scanners of the selected profile run; the others are forced off.
+        case "$SCAN" in
+          code) MODE_IMAGE=off; MODE_WORKFLOWS=off ;;
+          image) MODE_SECRETS=off; MODE_DEPS=off; MODE_SAST=off; MODE_WORKFLOWS=off ;;
+          workflows) MODE_SECRETS=off; MODE_DEPS=off; MODE_SAST=off; MODE_IMAGE=off ;;
+          *) echo "::error::SCAN must be code, image or workflows (got '$SCAN')"; exit 1 ;;
+        esac
+        {
+          echo "SCAN_WORKDIR=$workdir"
+          echo "SCAN_ACTION_PATH=$ACTION_PATH"
+          echo "SCAN_MODE_SECRETS=$MODE_SECRETS"
+          echo "SCAN_MODE_DEPS=$MODE_DEPS"
+          echo "SCAN_MODE_SAST=$MODE_SAST"
+          echo "SCAN_MODE_IMAGE=$MODE_IMAGE"
+          echo "SCAN_MODE_WORKFLOWS=$MODE_WORKFLOWS"
+          echo "SCAN_BASE_SHA=$BASE_SHA"
+          echo "SCAN_PR_NUMBER=$PR_NUMBER"
+          echo "SCAN_IMAGE=$IMAGE"
+          echo "SEMGREP_IMAGE=$SEMGREP_IMAGE"
+          echo "ZIZMOR_IMAGE=$ZIZMOR_IMAGE"
+          echo "GITLEAKS_VERSION=$GITLEAKS_VERSION"
+          echo "TRIVY_VERSION=$TRIVY_VERSION"
+          echo "TRIVY_CACHE_DIR=$RUNNER_TEMP/trivy-cache"
+        } >> "$GITHUB_ENV"
+        echo "date=$(date -u +%Y-%m-%d)" >> "$GITHUB_OUTPUT"
+        echo "modes: secrets=$MODE_SECRETS deps=$MODE_DEPS sast=$MODE_SAST image=$MODE_IMAGE workflows=$MODE_WORKFLOWS"
+
+    - name: Resolve context
+      id: context
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" context
+
+    - name: Install gitleaks and trivy
+      if: inputs.SCAN != 'workflows'
+      shell: bash
+      run: |
+        bash "$SCAN_ACTION_PATH/install-tools.sh" "$SCAN_WORKDIR/bin"
+        echo "GITLEAKS_BIN=$SCAN_WORKDIR/bin/gitleaks" >> "$GITHUB_ENV"
+        echo "TRIVY_BIN=$SCAN_WORKDIR/bin/trivy" >> "$GITHUB_ENV"
+
+    - name: Cache Trivy database
+      if: inputs.SELF_HOSTED_RUNNER != 'true' && (steps.context.outputs.run_deps == 'true' || inputs.SCAN == 'image')
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/trivy-cache
+        key: trivy-db-${{ steps.prepare.outputs.date }}
+        restore-keys: |
+          trivy-db-
+
+    - name: Cache Trivy database (Cloud Storage)
+      if: inputs.SELF_HOSTED_RUNNER == 'true' && (steps.context.outputs.run_deps == 'true' || inputs.SCAN == 'image')
+      # TODO: [PLAT-833] Implement CI and versioning for gcs-cache-action
+      uses: reside-eng/gcs-cache-action@main
+      with:
+        bucket: side-self-hosted-ci-cache
+        path: ${{ runner.temp }}/trivy-cache
+        key: trivy-db-${{ steps.prepare.outputs.date }}
+        restore-keys: |
+          trivy-db-
+
+    - name: Secrets (gitleaks)
+      if: steps.context.outputs.run_secrets == 'true'
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" secrets
+
+    - name: Dependencies (Trivy)
+      if: steps.context.outputs.run_deps == 'true'
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" deps
+
+    - name: Docker Hub login
+      if: steps.context.outputs.run_sast == 'true' && inputs.DOCKER_OAT != ''
+      shell: bash
+      env:
+        DOCKER_OAT: ${{ inputs.DOCKER_OAT }}
+      run: echo "$DOCKER_OAT" | docker login --username sideinc --password-stdin
+
+    - name: SAST (Semgrep)
+      if: steps.context.outputs.run_sast == 'true'
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" sast
+
+    - name: Image (Trivy)
+      if: inputs.SCAN == 'image'
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" image
+
+    - name: Workflows (zizmor)
+      if: steps.context.outputs.run_workflows == 'true'
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" workflows
+
+    - name: Report
+      id: report
+      shell: bash
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" report
+
+    - name: Upload results artifact
+      if: always() && steps.context.outcome == 'success'
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: security-scan-${{ inputs.SCAN }}${{ inputs.ARTIFACT_SUFFIX != '' && format('-{0}', inputs.ARTIFACT_SUFFIX) || '' }}
+        path: ${{ env.SCAN_WORKDIR }}/artifact
+        retention-days: 30
+        overwrite: true
+        if-no-files-found: ignore
+
+    - name: Upload results to Cloud Storage
+      if: always() && inputs.RESULTS_BUCKET != '' && steps.report.outcome != 'skipped'
+      continue-on-error: true
+      shell: bash
+      env:
+        BUCKET: ${{ inputs.RESULTS_BUCKET }}
+        SCAN: ${{ inputs.SCAN }}
+        SUFFIX: ${{ inputs.ARTIFACT_SUFFIX }}
+      run: |
+        f="$SCAN_WORKDIR/artifact/results.json"
+        [ -f "$f" ] || exit 0
+        dest="gs://$BUCKET/security-scans/${GITHUB_REPOSITORY#*/}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$SCAN${SUFFIX:+-$SUFFIX}.json"
+        gcloud storage cp "$f" "$dest" --quiet && echo "results uploaded to $dest"
+
+    - name: PR comment
+      if: always() && inputs.PR_COMMENT == 'true' && steps.report.outcome != 'skipped'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+      run: python3 "$SCAN_ACTION_PATH/security-scan.py" comment
+
+    - name: Get review-request token
+      id: review-token
+      if: github.event_name == 'pull_request' && steps.context.outputs.allowlist_changed == 'true' && inputs.REVIEW_REQUEST_APP_ID != ''
+      continue-on-error: true
+      uses: peter-murray/workflow-application-token-action@dad2b81e50ce3edeb5f3b7ffbd79f731368bd668 # v5.1.1
+      with:
+        application_id: ${{ inputs.REVIEW_REQUEST_APP_ID }}
+        application_private_key: ${{ inputs.REVIEW_REQUEST_APP_PRIVATE_KEY }}
+
+    # Allow-list edits (.gitleaks.toml, .gitleaksignore, .trivyignore.yaml, .semgrepignore) get a devops review.
+    - name: Request devops review for allow-list changes
+      if: steps.review-token.outcome == 'success'
+      continue-on-error: true
+      shell: bash
+      env:
+        GH_TOKEN: ${{ steps.review-token.outputs.token }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        if gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/requested_reviewers" --jq '.teams[].slug' | grep -qx devops; then
+          echo "devops review already requested"; exit 0
+        fi
+        gh api -X POST "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/requested_reviewers" -f "team_reviewers[]=devops" \
+          && echo "::notice title=security-scan::Security allow-list files changed: devops review requested" \
+          || echo "::notice title=security-scan::Could not request the devops review (already requested?)"
