@@ -945,8 +945,7 @@ def aggregate_bundles(bundles):
         r = (b.get("scanners") or {}).get("image")
         if not r:
             continue
-        name = b.get("suffix") or (b.get("job") or "image")
-        suffix = f": {name}"
+        suffix = f": {b['suffix']}" if b.get("suffix") else ""
         f, _ = classify_results({"image": r}, suffix)
         failures += f
         os_name = f" ({r.get('os')})" if r.get("os") else ""
