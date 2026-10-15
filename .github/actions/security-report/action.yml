@@ -1,0 +1,39 @@
+name: 'Security report'
+description: 'One PR comment and job summary from the security-scan-* artifacts of the run (code and image scans)'
+inputs:
+  PR_NUMBER:
+    description: 'Pull request number (default: the one recorded by the scan jobs)'
+    default: ''
+    required: false
+  ARTIFACT_PATTERN:
+    description: 'Artifacts to aggregate'
+    default: 'security-scan-*'
+    required: false
+  GITHUB_TOKEN:
+    description: 'Token for the PR comment'
+    default: ${{ github.token }}
+    required: false
+outputs:
+  conclusion:
+    description: 'pass | advisory | fail'
+    value: ${{ steps.aggregate.outputs.conclusion }}
+runs:
+  using: 'composite'
+  steps:
+    - name: Download scan results
+      uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+      with:
+        pattern: ${{ inputs.ARTIFACT_PATTERN }}
+        path: ${{ runner.temp }}/security-report
+        merge-multiple: false
+
+    - name: Aggregate and comment
+      id: aggregate
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.GITHUB_TOKEN }}
+        SCAN_PR_NUMBER: ${{ inputs.PR_NUMBER }}
+        SCAN_AGGREGATE_DIR: ${{ runner.temp }}/security-report
+        SCAN_WORKDIR: ${{ runner.temp }}/security-report-work
+        ACTION_PATH: ${{ github.action_path }}
+      run: python3 "$ACTION_PATH/../security-scan/security-scan.py" aggregate

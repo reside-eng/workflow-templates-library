@@ -152,3 +152,27 @@ class Reporting(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Aggregate(unittest.TestCase):
+    def test_single_report_from_code_and_image_bundles(self):
+        secrets = {"scanner": "secrets", "status": "findings", "mode": "blocking", "gate_applies": True, "notes": [],
+                   "findings": [{"rule": "slack-webhook-url", "file": "src/a.js", "line": 6, "description": "d",
+                                 "fingerprint": "src/a.js:slack-webhook-url:6", "entropy": 4.1, "gate": True}]}
+        sast = {"scanner": "sast", "status": "clean", "mode": "advisory", "gate_applies": True, "notes": [], "findings": []}
+        image = {"scanner": "image", "status": "findings", "mode": "advisory", "gate_applies": True, "notes": [],
+                 "os": "alpine 3.23.4",
+                 "findings": [{"id": "CVE-1", "pkg": "libssl3", "installed": "1", "fixed": "2", "severity": "HIGH",
+                               "url": "", "gate": True}]}
+        code = {"schema": 1, "profile": "code", "suffix": "", "conclusion": "fail", "event": "pull_request",
+                "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 3,
+                "scanners": {"secrets": secrets, "sast": sast}}
+        img = {"schema": 1, "profile": "image", "suffix": "admin-ui", "conclusion": "advisory", "event": "pull_request",
+               "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 3, "scanners": {"image": image}}
+        conclusion, body, total = ss.aggregate_bundles([img, code])
+        self.assertEqual((conclusion, total), ("fail", 2))
+        self.assertIn("| Secrets (gitleaks) | blocking | 1 finding |", body)
+        self.assertIn("| Image (Trivy, OS packages): admin-ui (alpine 3.23.4) | advisory | 1 finding |", body)
+        self.assertIn("**Blocking:** Secrets (gitleaks): 1 finding(s) introduced by this PR", body)
+        self.assertIn("### Image (Trivy, OS packages): admin-ui", body)
+        self.assertIn("2 scan job(s)", body)

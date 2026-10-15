@@ -41,6 +41,7 @@ SEMGREP_EXCLUDES = (
     "*.stories.tsx", "Dockerfile*", "*.md",
 )
 TRIVY_IGNORE_MAX_DAYS = 90
+SCANNER_ORDER = ("secrets", "deps", "sast", "image", "workflows")
 SCANNER_TITLES = {
     "secrets": "Secrets (gitleaks)",
     "deps": "Dependencies (Trivy, lockfile)",
@@ -773,22 +774,49 @@ def describe(scanner, r):
     return f"{n} finding{'s' if n != 1 else ''}"
 
 
+def ordered(results):
+    return [(s, results[s]) for s in SCANNER_ORDER if s in results]
+
+
+def classify_results(results, title_suffix=""):
+    """Blocking failures and advisory warnings for a set of scanner results."""
+    failures, warnings_out = [], []
+    for s, r in ordered(results):
+        title = SCANNER_TITLES[s] + title_suffix
+        mode, status = r.get("mode"), r.get("status")
+        g = gate_count(r)
+        if status == "error":
+            (failures if mode == "blocking" else warnings_out).append(f"{title}: {r.get('error', 'scanner error')}")
+        elif g and mode == "blocking":
+            failures.append(f"{title}: {g} finding(s) introduced by this PR")
+        elif r.get("findings") and status == "findings":
+            warnings_out.append(f"{title}: {describe(s, r)}")
+    return failures, warnings_out
+
+
+def finding_sections(results, title_suffix=""):
+    """Markdown sections (tables + allow-list hint) for every scanner with findings or an error."""
+    lines = []
+    for s, r in ordered(results):
+        title = SCANNER_TITLES[s] + title_suffix
+        if r.get("status") == "error":
+            lines += [f"### {title}: error", "", md_escape(r.get("error", ""))[:800], ""]
+        if r.get("findings") and (s != "deps" or any(x["new"] for x in r["findings"])):
+            lines += [f"### {title}", "", scanner_table(s, r), "", allowlist_hint(s), ""]
+        for n in r.get("notes") or []:
+            lines.append(f"- {n}")
+    return lines
+
+
 def cmd_report():
     ctx = load_ctx()
     scanners = [s for s in ("secrets", "deps", "sast", "image", "workflows") if (workdir() / f"{s}.json").exists()]
     results = {s: load_json(workdir() / f"{s}.json") for s in scanners}
-    failures, warnings_out, lines = [], [], []
+    failures, warnings_out = classify_results(results)
+    lines = []
     for s in scanners:
         r = results[s]
-        mode, status = r.get("mode"), r.get("status")
-        g = gate_count(r)
-        if status == "error":
-            msg = f"{SCANNER_TITLES[s]}: {r.get('error', 'scanner error')}"
-            (failures if mode == "blocking" else warnings_out).append(msg)
-        elif g and mode == "blocking":
-            failures.append(f"{SCANNER_TITLES[s]}: {g} finding(s) introduced by this PR")
-        elif r.get("findings") and status == "findings":
-            warnings_out.append(f"{SCANNER_TITLES[s]}: {describe(s, r)}")
+        mode = r.get("mode")
         for x in r.get("findings") or []:
             if not x.get("file"):
                 continue
@@ -815,22 +843,7 @@ def cmd_report():
     if failures:
         lines.append("**Blocking:** " + "; ".join(failures))
         lines.append("")
-    for s in scanners:
-        r = results[s]
-        if r.get("status") == "error":
-            lines.append(f"### {SCANNER_TITLES[s]}: error")
-            lines.append("")
-            lines.append(md_escape(r.get("error", ""))[:800])
-            lines.append("")
-        if r.get("findings") and (s != "deps" or any(x["new"] for x in r["findings"])):
-            lines.append(f"### {SCANNER_TITLES[s]}")
-            lines.append("")
-            lines.append(scanner_table(s, r))
-            lines.append("")
-            lines.append(allowlist_hint(s))
-            lines.append("")
-        for n in r.get("notes") or []:
-            lines.append(f"- {n}")
+    lines += finding_sections(results)
     lines.append("")
     base = ctx.get("base") or ""
     lines.append(f"<sub>base `{base[:12]}` head `{ctx.get('head', '')[:12]}`, {len(ctx.get('changed') or {})} changed files. "
@@ -847,6 +860,7 @@ def cmd_report():
         "schema": 1, "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "repository": env("GITHUB_REPOSITORY"), "run_id": env("GITHUB_RUN_ID"), "run_attempt": env("GITHUB_RUN_ATTEMPT"),
         "job": env("GITHUB_JOB"), "event": ctx.get("event"), "pr_number": ctx.get("pr_number"),
+        "is_fork": bool(ctx.get("is_fork")), "profile": profile, "suffix": suffix,
         "head": ctx.get("head"), "base": base, "actor": env("GITHUB_ACTOR"), "conclusion": conclusion,
         "changed_files": len(ctx.get("changed") or {}), "scanners": results,
     }
@@ -868,21 +882,9 @@ def gh_api(*args, input_text=None):
     return run(["gh", "api", *args], input_text=input_text)
 
 
-def cmd_comment():
-    ctx = load_ctx()
-    pr = ctx.get("pr_number")
+def upsert_pr_comment(marker, body, has_content, pr, head):
+    """Create or update the single comment starting with `marker`; rewrite it to pass when nothing is left."""
     repo = env("GITHUB_REPOSITORY")
-    if ctx.get("event") == "merge_group" or not pr or ctx.get("is_fork"):
-        log("PR comment skipped (merge queue, fork or no PR number)")
-        return
-    if not env("GH_TOKEN"):
-        log("PR comment skipped (no GH_TOKEN)")
-        return
-    body_path = workdir() / "comment.md"
-    body = body_path.read_text() if body_path.exists() else ""
-    bundle = load_json(workdir() / "artifact" / "results.json", {}) or {}
-    has_content = bundle.get("conclusion") in ("fail", "advisory")
-    marker = comment_marker()
     r = gh_api("--paginate", f"repos/{repo}/issues/{pr}/comments", "--jq",
                f'.[] | select(.body | startswith("{marker}")) | .id')
     existing = [i for i in r.stdout.split() if i.strip()]
@@ -894,8 +896,7 @@ def cmd_comment():
             res = gh_api("-X", "POST", f"repos/{repo}/issues/{pr}/comments", "--input", "-", input_text=payload)
         log("comment upserted" if res.returncode == 0 else f"comment failed: {res.stderr[-300:]}")
     elif existing:
-        clean = (f"{marker}\n## 🔎 Security scan: pass\n\nNo findings on the latest push "
-                 f"(`{ctx.get('head', '')[:12]}`).")
+        clean = f"{marker}\n## 🔎 Security scan: pass\n\nNo findings on the latest push (`{head[:12]}`)."
         res = gh_api("-X", "PATCH", f"repos/{repo}/issues/comments/{existing[0]}", "--input", "-",
                      input_text=json.dumps({"body": clean}))
         log("comment cleared" if res.returncode == 0 else f"comment update failed: {res.stderr[-300:]}")
@@ -903,9 +904,97 @@ def cmd_comment():
         log("nothing to comment")
 
 
+def comment_allowed(event, pr, is_fork):
+    if event == "merge_group" or not pr or is_fork:
+        log("PR comment skipped (merge queue, fork or no PR number)")
+        return False
+    if not env("GH_TOKEN"):
+        log("PR comment skipped (no GH_TOKEN)")
+        return False
+    return True
+
+
+def cmd_comment():
+    ctx = load_ctx()
+    if not comment_allowed(ctx.get("event"), ctx.get("pr_number"), ctx.get("is_fork")):
+        return
+    body_path = workdir() / "comment.md"
+    body = body_path.read_text() if body_path.exists() else ""
+    bundle = load_json(workdir() / "artifact" / "results.json", {}) or {}
+    upsert_pr_comment(comment_marker(), body, bundle.get("conclusion") in ("fail", "advisory"),
+                      ctx.get("pr_number"), ctx.get("head", ""))
+
+
+# ----------------------------------------------------------------------------- aggregate
+def aggregate_bundles(bundles):
+    """One report from the results.json of every scan job of a run: (conclusion, markdown, findings)."""
+    code = [b for b in bundles if b.get("profile", "code") in ("code", "workflows")]
+    images = sorted((b for b in bundles if b.get("profile") == "image"), key=lambda b: b.get("suffix") or "")
+    conclusions = {b.get("conclusion") for b in bundles}
+    conclusion = "fail" if "fail" in conclusions else ("advisory" if "advisory" in conclusions else "pass")
+    failures, rows, sections, total = [], [], [], 0
+    for b in code:
+        results = b.get("scanners") or {}
+        f, _ = classify_results(results)
+        failures += f
+        for s, r in ordered(results):
+            rows.append(f"| {SCANNER_TITLES[s]} | {r.get('mode')} | {describe(s, r)} |")
+            total += len(r.get("findings") or [])
+        sections += finding_sections(results)
+    for b in images:
+        r = (b.get("scanners") or {}).get("image")
+        if not r:
+            continue
+        name = b.get("suffix") or (b.get("job") or "image")
+        suffix = f": {name}"
+        f, _ = classify_results({"image": r}, suffix)
+        failures += f
+        os_name = f" ({r.get('os')})" if r.get("os") else ""
+        rows.append(f"| {SCANNER_TITLES['image']}{suffix}{os_name} | {r.get('mode')} | {describe('image', r)} |")
+        total += len(r.get("findings") or [])
+        sections += finding_sections({"image": r}, suffix)
+    first = code[0] if code else (images[0] if images else {})
+    lines = [f"## 🔎 Security scan: {conclusion}"]
+    if first.get("event") == "merge_group":
+        lines[0] += " (merge queue)"
+    lines += ["", "| Scanner | Mode | Result |", "| --- | --- | --- |", *rows, ""]
+    if failures:
+        lines += ["**Blocking:** " + "; ".join(failures), ""]
+    lines += sections
+    lines += ["", f"<sub>base `{(first.get('base') or '')[:12]}` head `{(first.get('head') or '')[:12]}`, "
+                  f"{first.get('changed_files', 0)} changed files, {len(bundles)} scan job(s). "
+                  "Policies and allow-list formats: workflow-templates `docs/security-scanners.md`.</sub>"]
+    return conclusion, "\n".join(lines), total
+
+
+def cmd_aggregate():
+    root = Path(env("SCAN_AGGREGATE_DIR") or (workdir() / "aggregate"))
+    bundles = [b for b in (load_json(f) for f in sorted(root.rglob("results.json"))) if b and b.get("schema") == 1]
+    log(f"{len(bundles)} scan result bundle(s) under {root}")
+    set_output("bundles", str(len(bundles)))
+    if not bundles:
+        return
+    conclusion, body, total = aggregate_bundles(bundles)
+    log(body)
+    step_summary = env("GITHUB_STEP_SUMMARY")
+    if step_summary:
+        with open(step_summary, "a") as f:
+            f.write(body + "\n")
+    (workdir() / "comment.md").write_text("<!-- security-scan -->\n" + body)
+    set_output("conclusion", conclusion)
+    set_output("findings_total", str(total))
+    first = bundles[0]
+    pr = env("SCAN_PR_NUMBER") or first.get("pr_number")
+    if not comment_allowed(first.get("event"), pr, any(b.get("is_fork") for b in bundles)):
+        return
+    upsert_pr_comment("<!-- security-scan -->", "<!-- security-scan -->\n" + body, conclusion != "pass",
+                      pr, first.get("head") or "")
+
+
 COMMANDS = {
     "context": cmd_context, "secrets": cmd_secrets, "deps": cmd_deps, "sast": cmd_sast,
     "image": cmd_image, "workflows": cmd_workflows, "report": cmd_report, "comment": cmd_comment,
+    "aggregate": cmd_aggregate,
 }
 
 if __name__ == "__main__":

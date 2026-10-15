@@ -50,7 +50,7 @@ inputs:
     default: 'reside-stage-plat-tools'
     required: false
   PR_COMMENT:
-    description: 'Upsert a PR comment when there are findings'
+    description: 'Upsert a PR comment for this job (false when a security-report job aggregates the run)'
     default: 'true'
     required: false
   ARTIFACT_SUFFIX:
@@ -72,12 +72,6 @@ inputs:
   DEBUG:
     description: 'true prints extra diagnostics (registry reachability, probe scans)'
     default: 'false'
-    required: false
-  GITLEAKS_VERSION:
-    default: '8.30.1'
-    required: false
-  TRIVY_VERSION:
-    default: '0.76.0'
     required: false
   SEMGREP_IMAGE:
     default: 'semgrep/semgrep:1.179.0@sha256:93963d9295a366f59e4850127b1550400ee7b388f04fe144e4a1f6325d96e01b'
@@ -112,8 +106,6 @@ runs:
         IMAGE: ${{ inputs.IMAGE }}
         SEMGREP_IMAGE: ${{ inputs.SEMGREP_IMAGE }}
         ZIZMOR_IMAGE: ${{ inputs.ZIZMOR_IMAGE }}
-        GITLEAKS_VERSION: ${{ inputs.GITLEAKS_VERSION }}
-        TRIVY_VERSION: ${{ inputs.TRIVY_VERSION }}
         DEBUG: ${{ inputs.DEBUG }}
       run: |
         workdir="$RUNNER_TEMP/security-scan-$SCAN${SUFFIX:+-$SUFFIX}"
@@ -140,8 +132,6 @@ runs:
           echo "SCAN_IMAGE=$IMAGE"
           echo "SEMGREP_IMAGE=$SEMGREP_IMAGE"
           echo "ZIZMOR_IMAGE=$ZIZMOR_IMAGE"
-          echo "GITLEAKS_VERSION=$GITLEAKS_VERSION"
-          echo "TRIVY_VERSION=$TRIVY_VERSION"
           echo "TRIVY_CACHE_DIR=$RUNNER_TEMP/trivy-cache"
           echo "SCAN_DEBUG=$DEBUG"
         } >> "$GITHUB_ENV"
