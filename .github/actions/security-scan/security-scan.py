@@ -124,13 +124,6 @@ def set_output(name, value):
     log(f"output {name}={value}")
 
 
-def set_env(name, value):
-    out = env("GITHUB_ENV")
-    if out:
-        with open(out, "a") as f:
-            f.write(f"{name}={value}\n")
-
-
 def read_event():
     return load_json(env("GITHUB_EVENT_PATH"), {}) or {}
 

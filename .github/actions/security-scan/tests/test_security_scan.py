@@ -150,9 +150,6 @@ class Reporting(unittest.TestCase):
         self.assertEqual(ss.describe("secrets", r), "1 finding")
 
 
-if __name__ == "__main__":
-    unittest.main()
-
 
 class Aggregate(unittest.TestCase):
     def test_single_report_from_code_and_image_bundles(self):
@@ -176,3 +173,5 @@ class Aggregate(unittest.TestCase):
         self.assertIn("**Blocking:** Secrets (gitleaks): 1 finding(s) introduced by this PR", body)
         self.assertIn("### Image (Trivy, OS packages): admin-ui", body)
         self.assertIn("2 scan job(s)", body)
+if __name__ == "__main__":
+    unittest.main()
