@@ -1,0 +1,13 @@
+# Semgrep registry rules excluded fleet-wide (one id per line). Each entry fires on a convention
+# this org chose deliberately or produces no actionable signal here; see docs/security-scanners.md.
+# `secrets: inherit` is the documented way to call our reusable workflows.
+yaml.github-actions.security.secrets-inherit.secrets-inherit
+# Caller workflows reference reusable workflows by major alias (@v12) on purpose.
+yaml.github-actions.security.github-actions-mutable-action-tag.github-actions-mutable-action-tag
+# Images run as root today; tracked as a hardening item, not a per-PR gate.
+dockerfile.security.missing-user.missing-user
+# Fires on every Fastify/Express reply.send() of request-derived data; no taint analysis in CE.
+javascript.express.security.audit.xss.direct-response-write.direct-response-write
+# Renovate minimumReleaseAge is set in the shared @side/renovate-config preset, not per repo.
+package_managers.renovate.renovate-missing-minimum-release-age.renovate-missing-minimum-release-age
+package_managers.npm.npm-missing-minimum-release-age.npm-missing-minimum-release-age

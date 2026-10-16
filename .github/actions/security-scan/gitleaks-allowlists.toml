@@ -1,0 +1,35 @@
+# Org-wide gitleaks allowlists, appended at run time to the repo's `.gitleaks.toml` (or to the
+# default rules when a repo has none). Only `[[allowlists]]` tables belong here.
+# Policies: docs/security-scanners.md.
+
+[[allowlists]]
+description = "org: test fixtures, mocks and e2e specs"
+paths = [
+  '''(^|/)(__tests__|__mocks__|__fixtures__|fixtures|mocks|cypress|security-eval)/''',
+  '''\.(test|spec|stories)\.[cm]?[jt]sx?$''',
+]
+
+[[allowlists]]
+description = "org: lockfiles and generated bundles"
+paths = [
+  '''(^|/)yarn\.lock$''',
+  '''(^|/)package-lock\.json$''',
+  '''(^|/)\.yarn/releases/''',
+  '''\.(min\.js|map|snap)$''',
+]
+
+[[allowlists]]
+description = "org: Next.js browser config holds public Firebase/GCP web API keys and client tokens by design"
+targetRules = ["gcp-api-key", "generic-api-key", "adobe-client-id"]
+paths = [
+  '''(^|/)apps/[^/]+/\.env(\.[A-Za-z0-9_-]+)*$''',
+  '''(^|/)\.env\.(base\.[A-Za-z0-9_-]+|development|test|pen-test)$''',
+  '''(^|/)(datadog-config|init-datadog)\.[jt]s$''',
+]
+
+[[allowlists]]
+description = "org: known placeholder values"
+regexTarget = "match"
+regexes = [
+  '''(?i)(example|placeholder|changeme|dummy|xxxx+|your[_-]?(api[_-]?)?key)''',
+]

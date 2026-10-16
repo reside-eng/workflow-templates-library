@@ -1,22 +1,89 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["local>reside-eng/renovate-config", ":reviewer(team:devops)"],
-  "ignorePresets": [":actions-ci"],
+  "extends": [
+    "local>reside-eng/renovate-config",
+    ":reviewer(team:devops)"
+  ],
+  "ignorePresets": [
+    ":actions-ci"
+  ],
   "packageRules": [
     {
       "description": "Configure dependencies (labels, commit format as releasable).",
-      "matchDepTypes": ["action"],
+      "matchDepTypes": [
+        "action"
+      ],
       "semanticCommitType": "fix",
       "semanticCommitScope": "deps",
-      "labels": ["dependencies"]
+      "labels": [
+        "dependencies"
+      ]
     },
     {
       "description": "Configure Github Actions dependencies (labels, commit format). NOTE: This is actions for this repo NOT templates.",
-      "matchDepTypes": ["action"],
-      "labels": ["github_actions", "ci"],
-      "matchFileNames": ["./github/workflows/publish.yml"],
+      "matchDepTypes": [
+        "action"
+      ],
+      "labels": [
+        "github_actions",
+        "ci"
+      ],
+      "matchFileNames": [
+        "./github/workflows/publish.yml"
+      ],
       "semanticCommitType": "chore",
       "semanticCommitScope": "ci-deps"
+    },
+    {
+      "description": "Security scanner tools bumped through the custom managers are released like action deps.",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "semanticCommitType": "fix",
+      "semanticCommitScope": "deps",
+      "labels": [
+        "dependencies",
+        "security-scan"
+      ]
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "gitleaks binaries pinned by version and asset sha256 in the security-scan action",
+      "managerFilePatterns": [
+        "/\\.github/actions/security-scan/install-tools\\.sh$/"
+      ],
+      "matchStrings": [
+        "GITLEAKS_(?:X64|ARM64)=\"(?<currentValue>\\d+\\.\\d+\\.\\d+) (?<currentDigest>[a-f0-9]{64})\""
+      ],
+      "depNameTemplate": "gitleaks/gitleaks",
+      "datasourceTemplate": "github-release-attachments",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "trivy binaries pinned by version and asset sha256 in the security-scan action",
+      "managerFilePatterns": [
+        "/\\.github/actions/security-scan/install-tools\\.sh$/"
+      ],
+      "matchStrings": [
+        "TRIVY_(?:X64|ARM64)=\"(?<currentValue>\\d+\\.\\d+\\.\\d+) (?<currentDigest>[a-f0-9]{64})\""
+      ],
+      "depNameTemplate": "aquasecurity/trivy",
+      "datasourceTemplate": "github-release-attachments",
+      "extractVersionTemplate": "^v(?<version>.+)$"
+    },
+    {
+      "customType": "regex",
+      "description": "Scanner container images (tag + digest) pinned in the security-scan action",
+      "managerFilePatterns": [
+        "/\\.github/actions/security-scan/action\\.yml$/"
+      ],
+      "matchStrings": [
+        "default: '(?<depName>semgrep/semgrep|ghcr\\.io/zizmorcore/zizmor):(?<currentValue>[^@']+)@(?<currentDigest>sha256:[a-f0-9]+)'"
+      ],
+      "datasourceTemplate": "docker"
     }
   ]
 }
