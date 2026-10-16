@@ -35,7 +35,7 @@ DOCKERFILE_RE = re.compile(r"(^|/)Dockerfile[^/]*$")
 WORKFLOW_RE = re.compile(r"^\.github/(workflows/[^/]+\.ya?ml|actions/.+/action\.ya?ml)$")
 SEMGREP_RULESETS = ("p/nodejs", "p/typescript", "p/react", "p/nextjs", "p/owasp-top-ten")
 SEMGREP_EXCLUDES = (
-    "node_modules", "dist", "build", ".next", "coverage", ".github", ".yarn",
+    "node_modules", "dist", "build", ".next", "coverage", ".yarn",
     "__tests__", "__mocks__", "__fixtures__", "fixtures", "mocks", "cypress", "security-eval",
     "*.test.ts", "*.test.tsx", "*.test.js", "*.test.jsx", "*.spec.ts", "*.spec.tsx", "*.spec.js", "*.spec.jsx",
     "*.stories.tsx", "Dockerfile*", "*.md",
@@ -68,6 +68,11 @@ def workspace():
 
 def action_path():
     return Path(env("SCAN_ACTION_PATH") or Path(__file__).resolve().parent)
+
+
+def sast_target(path):
+    """Application source outside tests, or a GitHub workflow/action file (Actions injection rules)."""
+    return (path.endswith(SOURCE_EXTS) and not TEST_PATH_RE.search(path)) or bool(WORKFLOW_RE.match(path))
 
 
 def mode_of(scanner):
@@ -230,7 +235,7 @@ def cmd_context():
         "added_lines": {k: sorted(v) for k, v in added_lines.items()},
         "dockerfile_changed": any(DOCKERFILE_RE.search(p) for p in files),
         "manifests_changed": any(basename(p) in MANIFESTS and "node_modules" not in p.split("/") for p in files),
-        "source_changed": any(p.endswith(SOURCE_EXTS) and not TEST_PATH_RE.search(p) for p in files),
+        "source_changed": any(sast_target(p) for p in files),
         "workflows_changed": any(WORKFLOW_RE.match(p) for p in files),
         "allowlist_changed": any(basename(p) in ALLOWLIST_FILES for p in files),
         "modes": {s: mode_of(s) for s in ("secrets", "deps", "sast", "image", "workflows")},
@@ -506,7 +511,7 @@ def semgrep_findings(report):
 
 def sast_debug(ws, image, uid, gid, ctx):
     """Extra probes when SCAN_DEBUG=true: registry reachability, a local rule, the registry without baseline."""
-    files = [p for p in ctx["changed"] if p.endswith(SOURCE_EXTS) and not TEST_PATH_RE.search(p)][:5]
+    files = [p for p in ctx["changed"] if sast_target(p)][:5]
     base = ["docker", "run", "--rm", "--user", f"{uid}:{gid}", "-e", "HOME=/tmp", "-v", f"{ws}:/src",
             "-v", f"{action_path()}:/action:ro", "-w", "/src"]
     group("sast debug")

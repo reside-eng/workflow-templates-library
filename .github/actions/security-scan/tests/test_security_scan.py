@@ -135,6 +135,16 @@ class ToolOutputParsing(unittest.TestCase):
         self.assertEqual((f[0]["file"], f[0]["line"], f[0]["gate"]), (".github/workflows/x.yml", 7, True))
 
 
+class SastTargets(unittest.TestCase):
+    def test_source_tests_and_workflows(self):
+        self.assertTrue(ss.sast_target("src/app.ts"))
+        self.assertFalse(ss.sast_target("src/__tests__/app.spec.ts"))
+        self.assertTrue(ss.sast_target(".github/workflows/deploy.yml"))
+        self.assertTrue(ss.sast_target(".github/actions/build/action.yml"))
+        self.assertFalse(ss.sast_target("deploy-parameters/prod.yaml"))
+        self.assertFalse(ss.sast_target("renovate.json"))
+
+
 class Reporting(unittest.TestCase):
     def test_comment_marker_per_profile(self):
         os.environ["SCAN_PROFILE"], os.environ["SCAN_SUFFIX"] = "image", "admin-ui"
