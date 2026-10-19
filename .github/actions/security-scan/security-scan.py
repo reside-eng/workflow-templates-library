@@ -245,6 +245,13 @@ def cmd_context():
     ctx["run_sast"] = ctx["modes"]["sast"] != "off" and bool(base) and ctx["source_changed"]
     ctx["run_workflows"] = ctx["modes"]["workflows"] != "off" and bool(base) and ctx["workflows_changed"]
     save_json(workdir() / "context.json", ctx)
+    skip_reasons = {
+        "secrets": "no changed files", "deps": "lockfile and manifests unchanged",
+        "sast": "no application source or workflow file changed", "workflows": "no workflow or action file changed",
+    }
+    for s in ("secrets", "deps", "sast", "workflows"):
+        if ctx["modes"][s] != "off" and not ctx[f"run_{s}"]:
+            result(s, "skipped", ctx["modes"][s], reason=skip_reasons[s] if base else "no base commit")
 
     log(f"head={head} base={base or '(none)'} changed_files={len(files)} fork={is_fork}")
     for key in ("run_secrets", "run_deps", "run_sast", "run_workflows", "dockerfile_changed", "allowlist_changed"):
@@ -768,7 +775,7 @@ def describe(scanner, r):
         err = sum(1 for x in r["findings"] if x["severity"] == "ERROR")
         return f"{n} new ({err} ERROR, {n - err} WARNING)"
     if scanner == "image" and not r.get("gate_applies", True):
-        return f"{n} fixable OS findings (not gating, Dockerfile unchanged)"
+        return f"{n} fixable OS findings in the base image, not from this PR (weekly scan)"
     return f"{n} finding{'s' if n != 1 else ''}"
 
 
@@ -787,9 +794,16 @@ def classify_results(results, title_suffix=""):
             (failures if mode == "blocking" else warnings_out).append(f"{title}: {r.get('error', 'scanner error')}")
         elif g and mode == "blocking":
             failures.append(f"{title}: {g} finding(s) introduced by this PR")
-        elif r.get("findings") and status == "findings":
+        elif r.get("findings") and status == "findings" and actionable(s, r):
             warnings_out.append(f"{title}: {describe(s, r)}")
     return failures, warnings_out
+
+
+def actionable(scanner, r):
+    """Findings the PR author can act on: everything except base-image findings when no Dockerfile changed."""
+    if scanner == "image" and not r.get("gate_applies", True):
+        return []
+    return r.get("findings") or []
 
 
 def finding_sections(results, title_suffix=""):
@@ -799,7 +813,7 @@ def finding_sections(results, title_suffix=""):
         title = SCANNER_TITLES[s] + title_suffix
         if r.get("status") == "error":
             lines += [f"### {title}: error", "", md_escape(r.get("error", ""))[:800], ""]
-        if r.get("findings") and (s != "deps" or any(x["new"] for x in r["findings"])):
+        if actionable(s, r) and (s != "deps" or any(x["new"] for x in r["findings"])):
             lines += [f"### {title}", "", scanner_table(s, r), "", allowlist_hint(s), ""]
         for n in r.get("notes") or []:
             lines.append(f"- {n}")

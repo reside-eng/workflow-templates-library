@@ -229,8 +229,10 @@ runs:
       run: |
         f="$SCAN_WORKDIR/artifact/results.json"
         [ -f "$f" ] || exit 0
+        # one JSON object per line, the layout BigQuery external tables read
+        jq -c . "$f" > "$SCAN_WORKDIR/results.ndjson"
         dest="gs://$BUCKET/security-scans/${GITHUB_REPOSITORY#*/}/${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-$SCAN${SUFFIX:+-$SUFFIX}.json"
-        gcloud storage cp "$f" "$dest" --quiet && echo "results uploaded to $dest"
+        gcloud storage cp "$SCAN_WORKDIR/results.ndjson" "$dest" --quiet && echo "results uploaded to $dest"
 
     - name: PR comment
       if: always() && inputs.PR_COMMENT == 'true' && steps.report.outcome != 'skipped'

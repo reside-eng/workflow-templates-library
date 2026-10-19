@@ -145,6 +145,23 @@ class SastTargets(unittest.TestCase):
         self.assertFalse(ss.sast_target("renovate.json"))
 
 
+class BaseImageFindings(unittest.TestCase):
+    def test_not_actionable_without_dockerfile_change(self):
+        image = {"scanner": "image", "status": "findings", "mode": "advisory", "gate_applies": False, "notes": [],
+                 "os": "alpine 3.24.1", "findings": [{"id": "CVE-1", "pkg": "libssl3", "installed": "1", "fixed": "2",
+                                                      "severity": "HIGH", "url": "", "gate": True}]}
+        self.assertEqual(ss.actionable("image", image), [])
+        failures, warnings = ss.classify_results({"image": image})
+        self.assertEqual((failures, warnings), ([], []))
+        self.assertEqual([l for l in ss.finding_sections({"image": image}) if l.startswith("### ")], [])
+        bundle = {"schema": 1, "profile": "image", "suffix": "", "conclusion": "pass", "event": "pull_request",
+                  "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 2, "scanners": {"image": image}}
+        conclusion, body, total = ss.aggregate_bundles([bundle])
+        self.assertEqual(conclusion, "pass")
+        self.assertIn("not from this PR", body)
+        self.assertNotIn("### Image", body)
+
+
 class Reporting(unittest.TestCase):
     def test_comment_marker_per_profile(self):
         os.environ["SCAN_PROFILE"], os.environ["SCAN_SUFFIX"] = "image", "admin-ui"
