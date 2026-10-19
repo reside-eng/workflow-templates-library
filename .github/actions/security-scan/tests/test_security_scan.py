@@ -62,6 +62,11 @@ class ClassifyDeps(unittest.TestCase):
         self.assertTrue(by_id["CVE-2"]["new"] and not by_id["CVE-2"]["gate"])
         self.assertFalse(by_id["CVE-3"]["new"] or by_id["CVE-3"]["gate"])
 
+    def test_base_scan_includes_dev_dependencies(self):
+        self.assertIn("--include-dev-deps", ss.deps_scan_args("base"))
+        self.assertNotIn("--include-dev-deps", ss.deps_scan_args("head", ["--ignorefile", "x"]))
+        self.assertIn("--ignorefile", ss.deps_scan_args("head", ["--ignorefile", "x"]))
+
     def test_trivy_vulns_extraction(self):
         report = {"Results": [{"Target": "yarn.lock", "Vulnerabilities": [
             {"VulnerabilityID": "CVE-9", "PkgName": "lodash", "InstalledVersion": "4.17.20", "FixedVersion": "4.17.21",

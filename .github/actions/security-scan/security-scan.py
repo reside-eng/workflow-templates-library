@@ -453,6 +453,16 @@ def trivy_cmd(*args):
     return [env("TRIVY_BIN", "trivy"), *args, "--quiet", "--exit-code", "0", "--no-progress", "--format", "json"]
 
 
+def deps_scan_args(side, extra=()):
+    """Trivy fs arguments. The head is production-only (the policy); the base also includes dev dependencies, because
+    Trivy's dev/prod classification of a package can differ between two lockfiles (seen on side-app: next, sharp,
+    postcss flipped to dev in the base tree) and an unchanged package must never count as new."""
+    args = ["fs", "--scanners", "vuln", "--pkg-types", "library", "--severity", "HIGH,CRITICAL", *extra]
+    if side == "base":
+        args.append("--include-dev-deps")
+    return args
+
+
 def cmd_deps():
     ctx = load_ctx()
     mode = ctx["modes"]["deps"]
@@ -477,12 +487,11 @@ def cmd_deps():
     if ignorefile.exists():
         policy_errors, notes = validate_trivyignore(ignorefile)
         extra = ["--ignorefile", str(ignorefile)]
-    base_cmd = ["fs", "--scanners", "vuln", "--pkg-types", "library", "--severity", "HIGH,CRITICAL", *extra]
     reports = {}
     group("trivy fs")
     for side in ("head", "base"):
         out = d / f"{side}.json"
-        r = run(trivy_cmd(*base_cmd, "--output", str(out), str(d / side)))
+        r = run(trivy_cmd(*deps_scan_args(side, extra), "--output", str(out), str(d / side)))
         log(r.stderr[-3000:])
         if r.returncode != 0:
             endgroup()
