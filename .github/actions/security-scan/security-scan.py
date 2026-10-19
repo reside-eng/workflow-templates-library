@@ -34,6 +34,8 @@ TEST_PATH_RE = re.compile(
 DOCKERFILE_RE = re.compile(r"(^|/)Dockerfile[^/]*$")
 WORKFLOW_RE = re.compile(r"^\.github/(workflows/[^/]+\.ya?ml|actions/.+/action\.ya?ml)$")
 BOT_ACTORS = ("renovate[bot]", "self-hosted-renovate-side-inc[bot]")  # dependency-update PRs: dependency scan only
+SKIP_REASONS = {"secrets": "no changed files", "deps": "lockfile and manifests unchanged",
+                "sast": "no application source or workflow file changed", "workflows": "no workflow or action file changed"}
 SEMGREP_RULESETS = ("p/nodejs", "p/typescript", "p/react", "p/nextjs", "p/owasp-top-ten")
 SEMGREP_EXCLUDES = (
     "node_modules", "dist", "build", ".next", "coverage", ".yarn",
@@ -139,6 +141,12 @@ def result(scanner, status, mode=None, **extra):
             "gate_applies": True, "notes": []}
     data.update(extra)
     save_json(workdir() / f"{scanner}.json", data)
+
+
+def skipped_result(scanner, ctx):
+    """Result of a scanner that does not run on this PR; cmd_context decided the reason."""
+    reason = (ctx.get("skipped") or {}).get(scanner) or ("no base commit" if not ctx.get("base") else SKIP_REASONS[scanner])
+    result(scanner, "skipped", ctx["modes"][scanner], reason=reason)
     return data
 
 
@@ -247,16 +255,14 @@ def cmd_context():
     ctx["run_deps"] = ctx["modes"]["deps"] != "off" and bool(base) and ctx["manifests_changed"]
     ctx["run_sast"] = ctx["modes"]["sast"] != "off" and bool(base) and ctx["source_changed"] and not bot
     ctx["run_workflows"] = ctx["modes"]["workflows"] != "off" and bool(base) and ctx["workflows_changed"] and not bot
-    save_json(workdir() / "context.json", ctx)
-    skip_reasons = {
-        "secrets": "no changed files", "deps": "lockfile and manifests unchanged",
-        "sast": "no application source or workflow file changed", "workflows": "no workflow or action file changed",
-    }
+    ctx["skipped"] = {}
     for s in ("secrets", "deps", "sast", "workflows"):
         if ctx["modes"][s] != "off" and not ctx[f"run_{s}"]:
-            reason = "no base commit" if not base else (
-                "Renovate PR, dependency scan only" if bot and s != "deps" else skip_reasons[s])
-            result(s, "skipped", ctx["modes"][s], reason=reason)
+            ctx["skipped"][s] = "no base commit" if not base else (
+                "Renovate PR, dependency scan only" if bot and s != "deps" else SKIP_REASONS[s])
+    save_json(workdir() / "context.json", ctx)
+    for s in ctx["skipped"]:
+        skipped_result(s, ctx)
 
     log(f"head={head} base={base or '(none)'} changed_files={len(files)} fork={is_fork} bot_pr={bot}")
     for key in ("run_secrets", "run_deps", "run_sast", "run_workflows", "dockerfile_changed", "allowlist_changed"):
@@ -309,8 +315,7 @@ def cmd_secrets():
     ctx = load_ctx()
     mode = ctx["modes"]["secrets"]
     if not ctx["run_secrets"]:
-        reason = "no changed files" if ctx["base"] else "no base commit"
-        result("secrets", "skipped", mode, reason=reason)
+        skipped_result("secrets", ctx)
         return
     ws = workspace()
     cfg, err = build_gitleaks_config(ws)
@@ -452,8 +457,7 @@ def cmd_deps():
     ctx = load_ctx()
     mode = ctx["modes"]["deps"]
     if not ctx["run_deps"]:
-        reason = "lockfile and manifests unchanged" if ctx["base"] else "no base commit"
-        result("deps", "skipped", mode, reason=reason)
+        skipped_result("deps", ctx)
         return
     ws = workspace()
     head_paths = manifest_paths(ctx["head"])
@@ -563,8 +567,7 @@ def cmd_sast():
     ctx = load_ctx()
     mode = ctx["modes"]["sast"]
     if not ctx["run_sast"]:
-        reason = "no application source changed" if ctx["base"] else "no base commit"
-        result("sast", "skipped", mode, reason=reason)
+        skipped_result("sast", ctx)
         return
     ws = workspace()
     out_dir = workdir() / "sast"
@@ -688,8 +691,7 @@ def cmd_workflows():
     ctx = load_ctx()
     mode = ctx["modes"]["workflows"]
     if not ctx["run_workflows"]:
-        reason = "no workflow or action files changed" if ctx["base"] else "no base commit"
-        result("workflows", "skipped", mode, reason=reason)
+        skipped_result("workflows", ctx)
         return
     ws = workspace()
     image = env("ZIZMOR_IMAGE", "ghcr.io/zizmorcore/zizmor:latest")
@@ -872,7 +874,7 @@ def cmd_report():
             f.write(summary + "\n")
     log(summary)
 
-    total = sum(len(r.get("findings") or []) for r in results.values())
+    total = sum(len(actionable(s, r)) for s, r in results.items())
     bundle = {
         "schema": 1, "generated_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
         "repository": env("GITHUB_REPOSITORY"), "run_id": env("GITHUB_RUN_ID"), "run_attempt": env("GITHUB_RUN_ATTEMPT"),
@@ -884,11 +886,11 @@ def cmd_report():
     art = workdir() / "artifact"
     art.mkdir(parents=True, exist_ok=True)
     save_json(art / "results.json", bundle)
+    (workdir() / "results.ndjson").write_text(json.dumps(bundle, separators=(",", ":")) + "\n")  # Cloud Storage copy
     comment = comment_marker() + "\n" + summary.replace(f"## {label}", f"## 🔎 {label}", 1)
     (workdir() / "comment.md").write_text(comment)
     set_output("conclusion", conclusion)
     set_output("findings_total", str(total))
-    set_output("comment_needed", "true" if (total or failures or warnings_out) else "false")
     if failures:
         log("::error title=security-scan::" + "; ".join(failures))
         sys.exit(1)
@@ -956,7 +958,7 @@ def aggregate_bundles(bundles, notes=()):
         failures += f
         for s, r in ordered(results):
             rows.append(f"| {SCANNER_TITLES[s]} | {r.get('mode')} | {describe(s, r)} |")
-            total += len(r.get("findings") or [])
+            total += len(actionable(s, r))
         sections += finding_sections(results)
     for b in images:
         r = (b.get("scanners") or {}).get("image")
@@ -967,7 +969,7 @@ def aggregate_bundles(bundles, notes=()):
         failures += f
         os_name = f" ({r.get('os')})" if r.get("os") else ""
         rows.append(f"| {SCANNER_TITLES['image']}{suffix}{os_name} | {r.get('mode')} | {describe('image', r)} |")
-        total += len(r.get("findings") or [])
+        total += len(actionable("image", r))
         sections += finding_sections({"image": r}, suffix)
     first = code[0] if code else (images[0] if images else {})
     lines = [f"## 🔎 Security scan: {conclusion}"]

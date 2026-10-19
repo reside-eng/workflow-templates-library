@@ -172,10 +172,53 @@ class RenovatePr(TempWorkspace):
         secrets = ss.load_json(ss.workdir() / "secrets.json")
         self.assertEqual((secrets["status"], secrets["reason"]), ("skipped", "Renovate PR, dependency scan only"))
         self.assertFalse((ss.workdir() / "deps.json").exists())
+        ss.cmd_secrets()  # the scanner steps keep the reason decided by cmd_context
+        ss.cmd_sast()
+        for s in ("secrets", "sast"):
+            self.assertEqual(ss.load_json(ss.workdir() / f"{s}.json")["reason"], "Renovate PR, dependency scan only")
         os.environ["GITHUB_ACTOR"] = "alice"
         ss.cmd_context()
         ctx = ss.load_json(ss.workdir() / "context.json")
         self.assertEqual((ctx["bot_pr"], ctx["run_secrets"], ctx["run_sast"]), (False, True, True))
+
+
+class ContextSkips(TempWorkspace):
+    def _env(self, **extra):
+        saved = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
+        os.environ.update({"GITHUB_ACTOR": "alice", "GITHUB_OUTPUT": "", "SCAN_MODE_SECRETS": "advisory",
+                           "SCAN_MODE_DEPS": "advisory", "SCAN_MODE_SAST": "advisory", **extra})
+
+    def test_readme_only_pr_skips_deps_and_sast_with_reasons(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "README.md").write_text("a\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "base")
+        git(self.ws, "checkout", "-qb", "feat")
+        (self.ws / "README.md").write_text("b\n")
+        git(self.ws, "commit", "-qam", "doc")
+        git(self.ws, "checkout", "-q", "main")
+        git(self.ws, "merge", "-q", "--no-ff", "feat", "-m", "merge")
+        self._env(GITHUB_SHA=git(self.ws, "rev-parse", "HEAD"))
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual(ctx["skipped"], {"deps": ss.SKIP_REASONS["deps"], "sast": ss.SKIP_REASONS["sast"]})
+        self.assertTrue(ctx["run_secrets"])
+        self.assertEqual(ss.load_json(ss.workdir() / "deps.json")["reason"], "lockfile and manifests unchanged")
+        ss.cmd_deps()
+        self.assertEqual(ss.load_json(ss.workdir() / "deps.json")["reason"], "lockfile and manifests unchanged")
+
+    def test_no_base_commit_skips_everything(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "README.md").write_text("a\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "only")
+        self._env(GITHUB_SHA=git(self.ws, "rev-parse", "HEAD"))
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual(ctx["base"], "")
+        self.assertEqual(set(ctx["skipped"]), {"secrets", "deps", "sast"})
+        self.assertEqual(ss.load_json(ss.workdir() / "secrets.json")["reason"], "no base commit")
 
 
 class BaseImageFindings(unittest.TestCase):
