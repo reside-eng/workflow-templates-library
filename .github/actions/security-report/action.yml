@@ -13,6 +13,10 @@ inputs:
     description: 'Token for the PR comment'
     default: ${{ github.token }}
     required: false
+  NOTES:
+    description: 'Extra report lines, one per line (for example why a scan job was skipped)'
+    default: ''
+    required: false
 outputs:
   conclusion:
     description: 'pass | advisory | fail'
@@ -33,6 +37,7 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.GITHUB_TOKEN }}
         SCAN_PR_NUMBER: ${{ inputs.PR_NUMBER }}
+        SCAN_NOTES: ${{ inputs.NOTES }}
         SCAN_AGGREGATE_DIR: ${{ runner.temp }}/security-report
         SCAN_WORKDIR: ${{ runner.temp }}/security-report-work
         ACTION_PATH: ${{ github.action_path }}

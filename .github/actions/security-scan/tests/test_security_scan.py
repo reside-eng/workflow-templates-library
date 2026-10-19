@@ -145,6 +145,39 @@ class SastTargets(unittest.TestCase):
         self.assertFalse(ss.sast_target("renovate.json"))
 
 
+class RenovatePr(TempWorkspace):
+    def _merge_pr(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "src").mkdir()
+        (self.ws / "src" / "a.ts").write_text("export const a = 1;\n")
+        (self.ws / "yarn.lock").write_text("a@1\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "base")
+        git(self.ws, "checkout", "-qb", "feat")
+        (self.ws / "src" / "a.ts").write_text("export const a = 2;\n")
+        (self.ws / "yarn.lock").write_text("a@2\n")
+        git(self.ws, "commit", "-qam", "bump")
+        git(self.ws, "checkout", "-q", "main")
+        git(self.ws, "merge", "-q", "--no-ff", "feat", "-m", "merge")
+        return git(self.ws, "rev-parse", "HEAD")
+
+    def test_bot_pr_runs_the_dependency_scan_only(self):
+        saved = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
+        os.environ.update({"GITHUB_SHA": self._merge_pr(), "GITHUB_ACTOR": "renovate[bot]", "GITHUB_OUTPUT": "",
+                           "SCAN_MODE_SECRETS": "advisory", "SCAN_MODE_DEPS": "advisory", "SCAN_MODE_SAST": "blocking"})
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual((ctx["bot_pr"], ctx["run_secrets"], ctx["run_deps"], ctx["run_sast"]), (True, False, True, False))
+        secrets = ss.load_json(ss.workdir() / "secrets.json")
+        self.assertEqual((secrets["status"], secrets["reason"]), ("skipped", "Renovate PR, dependency scan only"))
+        self.assertFalse((ss.workdir() / "deps.json").exists())
+        os.environ["GITHUB_ACTOR"] = "alice"
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual((ctx["bot_pr"], ctx["run_secrets"], ctx["run_sast"]), (False, True, True))
+
+
 class BaseImageFindings(unittest.TestCase):
     def test_not_actionable_without_dockerfile_change(self):
         image = {"scanner": "image", "status": "findings", "mode": "advisory", "gate_applies": False, "notes": [],
@@ -156,10 +189,11 @@ class BaseImageFindings(unittest.TestCase):
         self.assertEqual([l for l in ss.finding_sections({"image": image}) if l.startswith("### ")], [])
         bundle = {"schema": 1, "profile": "image", "suffix": "", "conclusion": "pass", "event": "pull_request",
                   "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 2, "scanners": {"image": image}}
-        conclusion, body, total = ss.aggregate_bundles([bundle])
+        conclusion, body, total = ss.aggregate_bundles([bundle], ["Image scan skipped: no Dockerfile changed"])
         self.assertEqual(conclusion, "pass")
         self.assertIn("not from this PR", body)
         self.assertNotIn("### Image", body)
+        self.assertIn("_Image scan skipped: no Dockerfile changed_", body)
 
 
 class Reporting(unittest.TestCase):

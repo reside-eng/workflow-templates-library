@@ -33,6 +33,7 @@ TEST_PATH_RE = re.compile(
 )
 DOCKERFILE_RE = re.compile(r"(^|/)Dockerfile[^/]*$")
 WORKFLOW_RE = re.compile(r"^\.github/(workflows/[^/]+\.ya?ml|actions/.+/action\.ya?ml)$")
+BOT_ACTORS = ("renovate[bot]", "self-hosted-renovate-side-inc[bot]")  # dependency-update PRs: dependency scan only
 SEMGREP_RULESETS = ("p/nodejs", "p/typescript", "p/react", "p/nextjs", "p/owasp-top-ten")
 SEMGREP_EXCLUDES = (
     "node_modules", "dist", "build", ".next", "coverage", ".yarn",
@@ -240,10 +241,12 @@ def cmd_context():
         "allowlist_changed": any(basename(p) in ALLOWLIST_FILES for p in files),
         "modes": {s: mode_of(s) for s in ("secrets", "deps", "sast", "image", "workflows")},
     }
-    ctx["run_secrets"] = ctx["modes"]["secrets"] != "off" and bool(base) and bool(files)
+    bot = env("GITHUB_ACTOR") in BOT_ACTORS  # a human pushing onto the bot's branch changes the actor
+    ctx["bot_pr"] = bot
+    ctx["run_secrets"] = ctx["modes"]["secrets"] != "off" and bool(base) and bool(files) and not bot
     ctx["run_deps"] = ctx["modes"]["deps"] != "off" and bool(base) and ctx["manifests_changed"]
-    ctx["run_sast"] = ctx["modes"]["sast"] != "off" and bool(base) and ctx["source_changed"]
-    ctx["run_workflows"] = ctx["modes"]["workflows"] != "off" and bool(base) and ctx["workflows_changed"]
+    ctx["run_sast"] = ctx["modes"]["sast"] != "off" and bool(base) and ctx["source_changed"] and not bot
+    ctx["run_workflows"] = ctx["modes"]["workflows"] != "off" and bool(base) and ctx["workflows_changed"] and not bot
     save_json(workdir() / "context.json", ctx)
     skip_reasons = {
         "secrets": "no changed files", "deps": "lockfile and manifests unchanged",
@@ -251,9 +254,11 @@ def cmd_context():
     }
     for s in ("secrets", "deps", "sast", "workflows"):
         if ctx["modes"][s] != "off" and not ctx[f"run_{s}"]:
-            result(s, "skipped", ctx["modes"][s], reason=skip_reasons[s] if base else "no base commit")
+            reason = "no base commit" if not base else (
+                "Renovate PR, dependency scan only" if bot and s != "deps" else skip_reasons[s])
+            result(s, "skipped", ctx["modes"][s], reason=reason)
 
-    log(f"head={head} base={base or '(none)'} changed_files={len(files)} fork={is_fork}")
+    log(f"head={head} base={base or '(none)'} changed_files={len(files)} fork={is_fork} bot_pr={bot}")
     for key in ("run_secrets", "run_deps", "run_sast", "run_workflows", "dockerfile_changed", "allowlist_changed"):
         set_output(key, "true" if ctx[key] else "false")
     set_output("base_sha", base)
@@ -938,7 +943,7 @@ def cmd_comment():
 
 
 # ----------------------------------------------------------------------------- aggregate
-def aggregate_bundles(bundles):
+def aggregate_bundles(bundles, notes=()):
     """One report from the results.json of every scan job of a run: (conclusion, markdown, findings)."""
     code = [b for b in bundles if b.get("profile", "code") in ("code", "workflows")]
     images = sorted((b for b in bundles if b.get("profile") == "image"), key=lambda b: b.get("suffix") or "")
@@ -972,6 +977,7 @@ def aggregate_bundles(bundles):
     if failures:
         lines += ["**Blocking:** " + "; ".join(failures), ""]
     lines += sections
+    lines += [f"_{n}_" for n in notes]
     lines += ["", f"<sub>base `{(first.get('base') or '')[:12]}` head `{(first.get('head') or '')[:12]}`, "
                   f"{first.get('changed_files', 0)} changed files, {len(bundles)} scan job(s). "
                   "Policies and allow-list formats: workflow-templates `docs/security-scanners.md`.</sub>"]
@@ -985,7 +991,8 @@ def cmd_aggregate():
     set_output("bundles", str(len(bundles)))
     if not bundles:
         return
-    conclusion, body, total = aggregate_bundles(bundles)
+    notes = [n.strip() for n in env("SCAN_NOTES").splitlines() if n.strip()]
+    conclusion, body, total = aggregate_bundles(bundles, notes)
     log(body)
     step_summary = env("GITHUB_STEP_SUMMARY")
     if step_summary:
