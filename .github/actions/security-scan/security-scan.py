@@ -437,12 +437,17 @@ def trivy_vulns(report):
     return out
 
 
-def classify_deps(head_v, base_v):
-    """Head findings with new (absent from base), fixable and gate (new and fixable) flags."""
+def classify_deps(head_v, base_v, base_all_v=None):
+    """Head findings flagged new (absent from the base in every dependency class), fixable, gate (new and fixable)
+    and dev_on_base (on the base only as a dev dependency). Trivy's dev/prod classification of a package can differ
+    between two lockfiles (side-app: next, sharp, postcss were dev-only in the base tree and production in the head),
+    so a package the base knows in any class is pre-existing; a dev-to-production move is counted, never gated."""
+    base_all_v = base_v if base_all_v is None else base_all_v
     findings = []
     for key in sorted(head_v, key=lambda k: (k[1], k[0])):
         v = dict(head_v[key])
-        v["new"] = key not in base_v
+        v["new"] = key not in base_all_v
+        v["dev_on_base"] = not v["new"] and key not in base_v
         v["fixable"] = bool(v["fixed"])
         v["gate"] = v["new"] and v["fixable"]
         findings.append(v)
@@ -453,12 +458,10 @@ def trivy_cmd(*args):
     return [env("TRIVY_BIN", "trivy"), *args, "--quiet", "--exit-code", "0", "--no-progress", "--format", "json"]
 
 
-def deps_scan_args(side, extra=()):
-    """Trivy fs arguments. The head is production-only (the policy); the base also includes dev dependencies, because
-    Trivy's dev/prod classification of a package can differ between two lockfiles (seen on side-app: next, sharp,
-    postcss flipped to dev in the base tree) and an unchanged package must never count as new."""
+def deps_scan_args(extra=(), include_dev=False):
+    """Trivy fs arguments; include_dev adds dev dependencies (the policy scans production dependencies only)."""
     args = ["fs", "--scanners", "vuln", "--pkg-types", "library", "--severity", "HIGH,CRITICAL", *extra]
-    if side == "base":
+    if include_dev:
         args.append("--include-dev-deps")
     return args
 
@@ -489,17 +492,18 @@ def cmd_deps():
         extra = ["--ignorefile", str(ignorefile)]
     reports = {}
     group("trivy fs")
-    for side in ("head", "base"):
-        out = d / f"{side}.json"
-        r = run(trivy_cmd(*deps_scan_args(side, extra), "--output", str(out), str(d / side)))
+    # head and base: production only; base_all: every dependency class, to absorb Trivy classification flips
+    for name, tree, include_dev in (("head", "head", False), ("base", "base", False), ("base_all", "base", True)):
+        out = d / f"{name}.json"
+        r = run(trivy_cmd(*deps_scan_args(extra, include_dev), "--output", str(out), str(d / tree)))
         log(r.stderr[-3000:])
         if r.returncode != 0:
             endgroup()
-            result("deps", "error", mode, error=f"trivy fs ({side}) exited {r.returncode}: {r.stderr[-800:]}")
+            result("deps", "error", mode, error=f"trivy fs ({name}) exited {r.returncode}: {r.stderr[-800:]}")
             return
-        reports[side] = trivy_vulns(load_json(out, {}))
+        reports[name] = trivy_vulns(load_json(out, {}))
     endgroup()
-    findings = classify_deps(reports["head"], reports["base"])
+    findings = classify_deps(reports["head"], reports["base"], reports["base_all"])
     conv = run([env("TRIVY_BIN", "trivy"), "convert", "--format", "sarif", "--output",
                 str(workdir() / "artifact" / "deps.sarif"), str(d / "head.json")])
     if conv.returncode != 0:
@@ -513,6 +517,7 @@ def cmd_deps():
     version = run([env("TRIVY_BIN", "trivy"), "--version"]).stdout.split("\n")[0].strip()
     result("deps", status, mode, findings=findings, policy_errors=policy_errors, notes=notes,
            existing=sum(1 for f in findings if not f["new"]), tool_version=version,
+           dev_on_base=sum(1 for f in findings if f.get("dev_on_base")),
            error="; ".join(policy_errors) if policy_errors else None)
 
 
@@ -786,7 +791,9 @@ def describe(scanner, r):
     if scanner == "deps":
         new = sum(1 for x in r["findings"] if x["new"])
         gate_word = "gating" if r.get("mode") == "blocking" else "would gate"
-        return f"{new} new ({g} {gate_word}), {r.get('existing', 0)} pre-existing"
+        dev = r.get("dev_on_base", 0)
+        dev_note = f", {dev} of them only as dev dependencies on the base" if dev else ""
+        return f"{new} new ({g} {gate_word}), {r.get('existing', 0)} pre-existing{dev_note}"
     if scanner == "sast":
         err = sum(1 for x in r["findings"] if x["severity"] == "ERROR")
         return f"{n} new ({err} ERROR, {n - err} WARNING)"

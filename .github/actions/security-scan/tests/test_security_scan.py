@@ -62,10 +62,24 @@ class ClassifyDeps(unittest.TestCase):
         self.assertTrue(by_id["CVE-2"]["new"] and not by_id["CVE-2"]["gate"])
         self.assertFalse(by_id["CVE-3"]["new"] or by_id["CVE-3"]["gate"])
 
-    def test_base_scan_includes_dev_dependencies(self):
-        self.assertIn("--include-dev-deps", ss.deps_scan_args("base"))
-        self.assertNotIn("--include-dev-deps", ss.deps_scan_args("head", ["--ignorefile", "x"]))
-        self.assertIn("--ignorefile", ss.deps_scan_args("head", ["--ignorefile", "x"]))
+    def test_scan_args(self):
+        self.assertIn("--include-dev-deps", ss.deps_scan_args((), include_dev=True))
+        self.assertNotIn("--include-dev-deps", ss.deps_scan_args(["--ignorefile", "x"]))
+        self.assertIn("--ignorefile", ss.deps_scan_args(["--ignorefile", "x"]))
+
+    def test_base_dev_dependencies_are_pre_existing_not_new(self):
+        head = {("CVE-1", "next"): {"id": "CVE-1", "pkg": "next", "fixed": "16.3"},
+                ("CVE-3", "next"): {"id": "CVE-3", "pkg": "next", "fixed": "16.4"},
+                ("CVE-2", "left-pad"): {"id": "CVE-2", "pkg": "left-pad", "fixed": "1.1"}}
+        base_prod = {}
+        base_all = {("CVE-1", "next"): {"id": "CVE-1", "pkg": "next", "fixed": "16.3"}}
+        by_id = {f["id"]: f for f in ss.classify_deps(head, base_prod, base_all)}
+        self.assertEqual((by_id["CVE-1"]["new"], by_id["CVE-1"]["dev_on_base"], by_id["CVE-1"]["gate"]), (False, True, False))
+        self.assertEqual((by_id["CVE-3"]["new"], by_id["CVE-3"]["gate"]), (True, True))  # a CVE the base never had
+        self.assertEqual((by_id["CVE-2"]["new"], by_id["CVE-2"]["dev_on_base"], by_id["CVE-2"]["gate"]), (True, False, True))
+        self.assertEqual(ss.describe("deps", {"status": "findings", "mode": "advisory", "gate_applies": True,
+                                             "findings": list(by_id.values()), "existing": 1, "dev_on_base": 1}),
+                         "2 new (2 would gate), 1 pre-existing, 1 of them only as dev dependencies on the base")
 
     def test_trivy_vulns_extraction(self):
         report = {"Results": [{"Target": "yarn.lock", "Vulnerabilities": [
