@@ -141,13 +141,13 @@ def result(scanner, status, mode=None, **extra):
             "gate_applies": True, "notes": []}
     data.update(extra)
     save_json(workdir() / f"{scanner}.json", data)
+    return data
 
 
 def skipped_result(scanner, ctx):
     """Result of a scanner that does not run on this PR; cmd_context decided the reason."""
     reason = (ctx.get("skipped") or {}).get(scanner) or ("no base commit" if not ctx.get("base") else SKIP_REASONS[scanner])
     result(scanner, "skipped", ctx["modes"][scanner], reason=reason)
-    return data
 
 
 def comment_marker():
