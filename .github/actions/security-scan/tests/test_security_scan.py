@@ -1,0 +1,300 @@
+"""Unit tests for security-scan.py (stdlib unittest; run: python3 -m unittest discover -s tests -v)."""
+import importlib.util
+import os
+import pathlib
+import shutil
+import subprocess
+import tempfile
+import unittest
+import datetime as dt
+
+HERE = pathlib.Path(__file__).resolve().parent.parent
+spec = importlib.util.spec_from_file_location("security_scan", HERE / "security-scan.py")
+ss = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(ss)
+
+
+def git(cwd, *args):
+    return subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", *args], cwd=cwd, check=True,
+                          text=True, capture_output=True).stdout.strip()
+
+
+class TempWorkspace(unittest.TestCase):
+    def setUp(self):
+        self.tmp = pathlib.Path(tempfile.mkdtemp())
+        self.ws = self.tmp / "ws"
+        self.ws.mkdir()
+        os.environ["GITHUB_WORKSPACE"] = str(self.ws)
+        os.environ["SCAN_WORKDIR"] = str(self.tmp / "work")
+        os.environ["SCAN_ACTION_PATH"] = str(HERE)
+
+    def tearDown(self):
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+
+class ParseAddedLines(TempWorkspace):
+    def test_added_and_modified_lines_only(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "a.txt").write_text("1\n2\n3\n4\n5\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "base")
+        base = git(self.ws, "rev-parse", "HEAD")
+        (self.ws / "a.txt").write_text("1\n2\nthree\n4\n5\n6\n7\n")
+        (self.ws / "b.txt").write_text("x\ny\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "head")
+        head = git(self.ws, "rev-parse", "HEAD")
+        added = ss.parse_added_lines(base, head, ["a.txt", "b.txt"])
+        self.assertEqual(added["a.txt"], {3, 6, 7})
+        self.assertEqual(added["b.txt"], {1, 2})
+
+
+class ClassifyDeps(unittest.TestCase):
+    def test_new_fixable_gates(self):
+        head = {
+            ("CVE-1", "p1"): {"id": "CVE-1", "pkg": "p1", "fixed": "1.1"},
+            ("CVE-2", "p2"): {"id": "CVE-2", "pkg": "p2", "fixed": ""},
+            ("CVE-3", "p3"): {"id": "CVE-3", "pkg": "p3", "fixed": "2.0"},
+        }
+        base = {("CVE-3", "p3"): {"id": "CVE-3", "pkg": "p3", "fixed": "2.0"}}
+        by_id = {f["id"]: f for f in ss.classify_deps(head, base)}
+        self.assertTrue(by_id["CVE-1"]["new"] and by_id["CVE-1"]["gate"])
+        self.assertTrue(by_id["CVE-2"]["new"] and not by_id["CVE-2"]["gate"])
+        self.assertFalse(by_id["CVE-3"]["new"] or by_id["CVE-3"]["gate"])
+
+    def test_scan_args(self):
+        self.assertIn("--include-dev-deps", ss.deps_scan_args((), include_dev=True))
+        self.assertNotIn("--include-dev-deps", ss.deps_scan_args(["--ignorefile", "x"]))
+        self.assertIn("--ignorefile", ss.deps_scan_args(["--ignorefile", "x"]))
+
+    def test_base_dev_dependencies_are_pre_existing_not_new(self):
+        head = {("CVE-1", "next"): {"id": "CVE-1", "pkg": "next", "fixed": "16.3"},
+                ("CVE-3", "next"): {"id": "CVE-3", "pkg": "next", "fixed": "16.4"},
+                ("CVE-2", "left-pad"): {"id": "CVE-2", "pkg": "left-pad", "fixed": "1.1"}}
+        base_prod = {}
+        base_all = {("CVE-1", "next"): {"id": "CVE-1", "pkg": "next", "fixed": "16.3"}}
+        by_id = {f["id"]: f for f in ss.classify_deps(head, base_prod, base_all)}
+        self.assertEqual((by_id["CVE-1"]["new"], by_id["CVE-1"]["dev_on_base"], by_id["CVE-1"]["gate"]), (False, True, False))
+        self.assertEqual((by_id["CVE-3"]["new"], by_id["CVE-3"]["gate"]), (True, True))  # a CVE the base never had
+        self.assertEqual((by_id["CVE-2"]["new"], by_id["CVE-2"]["dev_on_base"], by_id["CVE-2"]["gate"]), (True, False, True))
+        self.assertEqual(ss.describe("deps", {"status": "findings", "mode": "advisory", "gate_applies": True,
+                                             "findings": list(by_id.values()), "existing": 1, "dev_on_base": 1}),
+                         "2 new (2 would gate), 1 pre-existing, 1 of them only as dev dependencies on the base")
+
+    def test_trivy_vulns_extraction(self):
+        report = {"Results": [{"Target": "yarn.lock", "Vulnerabilities": [
+            {"VulnerabilityID": "CVE-9", "PkgName": "lodash", "InstalledVersion": "4.17.20", "FixedVersion": "4.17.21",
+             "Severity": "HIGH", "Title": "t", "PrimaryURL": "u"}]}]}
+        v = ss.trivy_vulns(report)[("CVE-9", "lodash")]
+        self.assertEqual((v["installed"], v["fixed"], v["severity"], v["target"]), ("4.17.20", "4.17.21", "HIGH", "yarn.lock"))
+
+
+@unittest.skipUnless(shutil.which("yq"), "yq not installed")
+class ValidateTrivyIgnore(TempWorkspace):
+    def test_policy(self):
+        today = dt.date.today()
+        soon = (today + dt.timedelta(days=30)).isoformat()
+        far = (today + dt.timedelta(days=200)).isoformat()
+        past = (today - dt.timedelta(days=1)).isoformat()
+        f = self.ws / ".trivyignore.yaml"
+        f.write_text(
+            "vulnerabilities:\n"
+            f"  - id: CVE-OK\n    statement: fine\n    expired_at: {soon}\n"
+            f"  - id: CVE-NOSTATEMENT\n    expired_at: {soon}\n"
+            "  - id: CVE-NOEXPIRY\n    statement: s\n"
+            f"  - id: CVE-FAR\n    statement: s\n    expired_at: {far}\n"
+            f"  - id: CVE-PAST\n    statement: s\n    expired_at: {past}\n"
+            "  - CVE-BARE\n")
+        errors, notes = ss.validate_trivyignore(f)
+        self.assertEqual(len(errors), 4, errors)
+        self.assertTrue(any("CVE-PAST" in n for n in notes))
+        self.assertFalse(any("CVE-OK" in e for e in errors))
+
+
+class GitleaksConfig(TempWorkspace):
+    def test_defaults_plus_org_allowlists(self):
+        path, err = ss.build_gitleaks_config(self.ws)
+        self.assertIsNone(err)
+        text = path.read_text()
+        self.assertIn("useDefault = true", text)
+        self.assertIn("org: test fixtures", text)
+
+    def test_repo_config_without_extend_gets_one(self):
+        (self.ws / ".gitleaks.toml").write_text('[[allowlists]]\ndescription = "repo"\npaths = ["x"]\n')
+        path, err = ss.build_gitleaks_config(self.ws)
+        self.assertIsNone(err)
+        self.assertTrue(path.read_text().startswith("[extend]\nuseDefault = true"))
+
+    def test_extend_path_is_rejected(self):
+        (self.ws / ".gitleaks.toml").write_text('[extend]\npath = "other.toml"\n')
+        path, err = ss.build_gitleaks_config(self.ws)
+        self.assertIsNone(path)
+        self.assertIn("extend.path", err)
+
+
+class ToolOutputParsing(unittest.TestCase):
+    def test_semgrep_findings(self):
+        report = {"results": [{"check_id": "r.eval", "path": "/src/src/a.ts", "start": {"line": 4},
+                               "extra": {"severity": "ERROR", "message": "m", "metadata": {"shortlink": "https://sg.run/x"}}},
+                              {"check_id": "r.warn", "path": "src/b.ts", "start": {"line": 9},
+                               "extra": {"severity": "WARNING", "message": "w", "metadata": {}}}]}
+        f = ss.semgrep_findings(report)
+        self.assertEqual([(x["file"], x["gate"]) for x in f], [("src/a.ts", True), ("src/b.ts", False)])
+
+    def test_zizmor_findings_restricted_to_changed_files(self):
+        raw = [{"ident": "template-injection", "desc": "d", "url": "u",
+                "determinations": {"severity": "High", "confidence": "High"},
+                "locations": [{"symbolic": {"key": {"Local": {"verbatim_path": "/src/.github/workflows/x.yml"}}},
+                               "concrete": {"location": {"start_point": {"row": 6, "column": 0}}}}]},
+               {"ident": "excessive-permissions", "desc": "d", "url": "u",
+                "determinations": {"severity": "Medium", "confidence": "High"},
+                "locations": [{"symbolic": {"key": {"Local": {"verbatim_path": "/src/.github/workflows/other.yml"}}}}]}]
+        f = ss.zizmor_findings(raw, {".github/workflows/x.yml"})
+        self.assertEqual(len(f), 1)
+        self.assertEqual((f[0]["file"], f[0]["line"], f[0]["gate"]), (".github/workflows/x.yml", 7, True))
+
+
+class SastTargets(unittest.TestCase):
+    def test_source_tests_and_workflows(self):
+        self.assertTrue(ss.sast_target("src/app.ts"))
+        self.assertFalse(ss.sast_target("src/__tests__/app.spec.ts"))
+        self.assertTrue(ss.sast_target(".github/workflows/deploy.yml"))
+        self.assertTrue(ss.sast_target(".github/actions/build/action.yml"))
+        self.assertFalse(ss.sast_target("deploy-parameters/prod.yaml"))
+        self.assertFalse(ss.sast_target("renovate.json"))
+
+
+class RenovatePr(TempWorkspace):
+    def _merge_pr(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "src").mkdir()
+        (self.ws / "src" / "a.ts").write_text("export const a = 1;\n")
+        (self.ws / "yarn.lock").write_text("a@1\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "base")
+        git(self.ws, "checkout", "-qb", "feat")
+        (self.ws / "src" / "a.ts").write_text("export const a = 2;\n")
+        (self.ws / "yarn.lock").write_text("a@2\n")
+        git(self.ws, "commit", "-qam", "bump")
+        git(self.ws, "checkout", "-q", "main")
+        git(self.ws, "merge", "-q", "--no-ff", "feat", "-m", "merge")
+        return git(self.ws, "rev-parse", "HEAD")
+
+    def test_bot_pr_runs_the_dependency_scan_only(self):
+        saved = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
+        os.environ.update({"GITHUB_SHA": self._merge_pr(), "GITHUB_ACTOR": "renovate[bot]", "GITHUB_OUTPUT": "",
+                           "SCAN_MODE_SECRETS": "advisory", "SCAN_MODE_DEPS": "advisory", "SCAN_MODE_SAST": "blocking"})
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual((ctx["bot_pr"], ctx["run_secrets"], ctx["run_deps"], ctx["run_sast"]), (True, False, True, False))
+        secrets = ss.load_json(ss.workdir() / "secrets.json")
+        self.assertEqual((secrets["status"], secrets["reason"]), ("skipped", "Renovate PR, dependency scan only"))
+        self.assertFalse((ss.workdir() / "deps.json").exists())
+        ss.cmd_secrets()  # the scanner steps keep the reason decided by cmd_context
+        ss.cmd_sast()
+        for s in ("secrets", "sast"):
+            self.assertEqual(ss.load_json(ss.workdir() / f"{s}.json")["reason"], "Renovate PR, dependency scan only")
+        os.environ["GITHUB_ACTOR"] = "alice"
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual((ctx["bot_pr"], ctx["run_secrets"], ctx["run_sast"]), (False, True, True))
+
+
+class ContextSkips(TempWorkspace):
+    def _env(self, **extra):
+        saved = dict(os.environ)
+        self.addCleanup(lambda: (os.environ.clear(), os.environ.update(saved)))
+        os.environ.update({"GITHUB_ACTOR": "alice", "GITHUB_OUTPUT": "", "SCAN_MODE_SECRETS": "advisory",
+                           "SCAN_MODE_DEPS": "advisory", "SCAN_MODE_SAST": "advisory", **extra})
+
+    def test_readme_only_pr_skips_deps_and_sast_with_reasons(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "README.md").write_text("a\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "base")
+        git(self.ws, "checkout", "-qb", "feat")
+        (self.ws / "README.md").write_text("b\n")
+        git(self.ws, "commit", "-qam", "doc")
+        git(self.ws, "checkout", "-q", "main")
+        git(self.ws, "merge", "-q", "--no-ff", "feat", "-m", "merge")
+        self._env(GITHUB_SHA=git(self.ws, "rev-parse", "HEAD"))
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual(ctx["skipped"], {"deps": ss.SKIP_REASONS["deps"], "sast": ss.SKIP_REASONS["sast"]})
+        self.assertTrue(ctx["run_secrets"])
+        self.assertEqual(ss.load_json(ss.workdir() / "deps.json")["reason"], "lockfile and manifests unchanged")
+        ss.cmd_deps()
+        self.assertEqual(ss.load_json(ss.workdir() / "deps.json")["reason"], "lockfile and manifests unchanged")
+
+    def test_no_base_commit_skips_everything(self):
+        git(self.ws, "init", "-q", "-b", "main")
+        (self.ws / "README.md").write_text("a\n")
+        git(self.ws, "add", "-A")
+        git(self.ws, "commit", "-qm", "only")
+        self._env(GITHUB_SHA=git(self.ws, "rev-parse", "HEAD"))
+        ss.cmd_context()
+        ctx = ss.load_json(ss.workdir() / "context.json")
+        self.assertEqual(ctx["base"], "")
+        self.assertEqual(set(ctx["skipped"]), {"secrets", "deps", "sast"})
+        self.assertEqual(ss.load_json(ss.workdir() / "secrets.json")["reason"], "no base commit")
+
+
+class BaseImageFindings(unittest.TestCase):
+    def test_not_actionable_without_dockerfile_change(self):
+        image = {"scanner": "image", "status": "findings", "mode": "advisory", "gate_applies": False, "notes": [],
+                 "os": "alpine 3.24.1", "findings": [{"id": "CVE-1", "pkg": "libssl3", "installed": "1", "fixed": "2",
+                                                      "severity": "HIGH", "url": "", "gate": True}]}
+        self.assertEqual(ss.actionable("image", image), [])
+        failures, warnings = ss.classify_results({"image": image})
+        self.assertEqual((failures, warnings), ([], []))
+        self.assertEqual([l for l in ss.finding_sections({"image": image}) if l.startswith("### ")], [])
+        bundle = {"schema": 1, "profile": "image", "suffix": "", "conclusion": "pass", "event": "pull_request",
+                  "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 2, "scanners": {"image": image}}
+        conclusion, body, total = ss.aggregate_bundles([bundle], ["Image scan skipped: no Dockerfile changed"])
+        self.assertEqual(conclusion, "pass")
+        self.assertIn("not from this PR", body)
+        self.assertNotIn("### Image", body)
+        self.assertIn("_Image scan skipped: no Dockerfile changed_", body)
+
+
+class Reporting(unittest.TestCase):
+    def test_comment_marker_per_profile(self):
+        os.environ["SCAN_PROFILE"], os.environ["SCAN_SUFFIX"] = "image", "admin-ui"
+        self.assertEqual(ss.comment_marker(), "<!-- security-scan:image:admin-ui -->")
+        os.environ["SCAN_PROFILE"], os.environ["SCAN_SUFFIX"] = "code", ""
+        self.assertEqual(ss.comment_marker(), "<!-- security-scan:code -->")
+
+    def test_gate_count_respects_gate_applies(self):
+        r = {"status": "findings", "mode": "blocking", "gate_applies": False, "findings": [{"gate": True}]}
+        self.assertEqual(ss.gate_count(r), 0)
+        r["gate_applies"] = True
+        self.assertEqual(ss.gate_count(r), 1)
+        self.assertEqual(ss.describe("secrets", r), "1 finding")
+
+
+
+class Aggregate(unittest.TestCase):
+    def test_single_report_from_code_and_image_bundles(self):
+        secrets = {"scanner": "secrets", "status": "findings", "mode": "blocking", "gate_applies": True, "notes": [],
+                   "findings": [{"rule": "slack-webhook-url", "file": "src/a.js", "line": 6, "description": "d",
+                                 "fingerprint": "src/a.js:slack-webhook-url:6", "entropy": 4.1, "gate": True}]}
+        sast = {"scanner": "sast", "status": "clean", "mode": "advisory", "gate_applies": True, "notes": [], "findings": []}
+        image = {"scanner": "image", "status": "findings", "mode": "advisory", "gate_applies": True, "notes": [],
+                 "os": "alpine 3.23.4",
+                 "findings": [{"id": "CVE-1", "pkg": "libssl3", "installed": "1", "fixed": "2", "severity": "HIGH",
+                               "url": "", "gate": True}]}
+        code = {"schema": 1, "profile": "code", "suffix": "", "conclusion": "fail", "event": "pull_request",
+                "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 3,
+                "scanners": {"secrets": secrets, "sast": sast}}
+        img = {"schema": 1, "profile": "image", "suffix": "admin-ui", "conclusion": "advisory", "event": "pull_request",
+               "pr_number": "7", "head": "h" * 40, "base": "b" * 40, "changed_files": 3, "scanners": {"image": image}}
+        conclusion, body, total = ss.aggregate_bundles([img, code])
+        self.assertEqual((conclusion, total), ("fail", 2))
+        self.assertIn("| Secrets (gitleaks) | blocking | 1 finding |", body)
+        self.assertIn("| Image (Trivy, OS packages): admin-ui (alpine 3.23.4) | advisory | 1 finding |", body)
+        self.assertIn("**Blocking:** Secrets (gitleaks): 1 finding(s) introduced by this PR", body)
+        self.assertIn("### Image (Trivy, OS packages): admin-ui", body)
+        self.assertIn("2 scan job(s)", body)
+if __name__ == "__main__":
+    unittest.main()

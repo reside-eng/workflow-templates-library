@@ -1,0 +1,14 @@
+# zizmor configuration for this repository's own workflow audit (security-self.yml).
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        # Our own actions and reusable workflows are referenced by major alias (@v12) on purpose.
+        "reside-eng/*": ref-pin
+        "*": hash-pin
+  # Permissions are declared by the calling repositories (README: Authentication & Permissions).
+  excessive-permissions:
+    disable: true
+  # Reusable workflows here reference this repository's composite actions by design.
+  self-repository:
+    disable: true
