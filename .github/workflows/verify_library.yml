@@ -226,7 +226,7 @@ jobs:
           fetch-depth: 2
 
       - name: Security scan
-        uses: reside-eng/workflow-templates-library/.github/actions/security-scan@feat/security-scanners
+        uses: reside-eng/workflow-templates-library/.github/actions/security-scan@v1
         with:
           SCAN: code
           MODE_SECRETS: ${{ vars.SECURITY_SCAN_SECRETS || 'off' }}
