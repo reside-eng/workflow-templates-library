@@ -4,6 +4,7 @@
     "local>reside-eng/renovate-config",
     ":reviewer(team:devops)"
   ],
+  "assignAutomerge": true,
   "ignorePresets": [
     ":actions-ci"
   ],
