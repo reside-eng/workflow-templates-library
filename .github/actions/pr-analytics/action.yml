@@ -1,0 +1,82 @@
+name: 'PR Analytics'
+description: 'Records every pull request closed on the default branch, metadata only, in side-dw.github.pull_requests (AI v2 M1, PLAT-12247). Copy of the workflow-templates action for the library release workflow (push to main): resolves the PRs merged by the pushed commit.'
+inputs:
+  CI_SERVICE_ACCOUNT:
+    description: 'Service account key used for BigQuery access (LIBRARY_CI_SERVICE_ACCOUNT)'
+    required: true
+runs:
+  using: 'composite'
+  steps:
+    - name: Collect pull request facts
+      id: collect
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EVENT_PR_NUMBER: ${{ github.event.pull_request.number || '' }}
+      run: |
+        set -euo pipefail
+        if [ -n "$EVENT_PR_NUMBER" ]; then
+          numbers="$EVENT_PR_NUMBER"
+          source=event
+        else
+          # push: closed PRs associated with the pushed commit (one for squash and merge commits)
+          numbers=$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq '.[] | select(.state == "closed") | .number' | sort -u)
+          source=push
+        fi
+        if [ -z "$numbers" ]; then
+          echo "No pull request associated with this event: nothing to record"
+          echo "rows=" >> "$GITHUB_OUTPUT"
+          exit 0
+        fi
+        recorded_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+        : > "$RUNNER_TEMP/pr-rows.jsonl"
+        for n in $numbers; do
+          pr=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$n")
+          reviews=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$n/reviews" \
+            --jq '[.[] | {login: .user.login, type: .user.type, state: .state, submitted_at: .submitted_at}]' | jq -cs 'add // []')
+          jq -cn --argjson pr "$pr" --argjson reviews "$reviews" --arg recorded_at "$recorded_at" \
+            --arg repository "$GITHUB_REPOSITORY" --arg source "$source" --argjson run_id "$GITHUB_RUN_ID" '{
+              recorded_at: $recorded_at, repository: $repository, number: $pr.number,
+              author: $pr.user.login, author_type: $pr.user.type, state: $pr.state, merged: ($pr.merged == true),
+              created_at: $pr.created_at, closed_at: $pr.closed_at, merged_at: $pr.merged_at,
+              merged_by: ($pr.merged_by.login // null),
+              base_ref: $pr.base.ref, head_ref: $pr.head.ref, head_sha: $pr.head.sha, merge_commit_sha: $pr.merge_commit_sha,
+              draft: ($pr.draft == true), labels: [$pr.labels[].name],
+              additions: $pr.additions, deletions: $pr.deletions, changed_files: $pr.changed_files, commits: $pr.commits,
+              auto_merge: ($pr.auto_merge != null), auto_merge_by: ($pr.auto_merge.enabled_by.login // null),
+              reviews: $reviews, review_comments: $pr.review_comments, comments: $pr.comments,
+              source: $source, run_id: $run_id
+            }' >> "$RUNNER_TEMP/pr-rows.jsonl"
+        done
+        echo "rows=$RUNNER_TEMP/pr-rows.jsonl" >> "$GITHUB_OUTPUT"
+        jq -c '{number, author, merged, merged_at, labels, reviews: (.reviews | length)}' "$RUNNER_TEMP/pr-rows.jsonl"
+
+    - name: Cloud SDK Auth
+      if: steps.collect.outputs.rows != ''
+      uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
+      with:
+        project_id: side-dw
+        credentials_json: ${{ inputs.CI_SERVICE_ACCOUNT }}
+        # The ci-analytics step that follows authenticates again in the same job
+        cleanup_credentials: false
+
+    - name: Insert into BigQuery
+      if: steps.collect.outputs.rows != ''
+      shell: bash
+      env:
+        ROWS_FILE: ${{ steps.collect.outputs.rows }}
+      run: |
+        set -euo pipefail
+        gcloud auth activate-service-account --key-file="$GOOGLE_APPLICATION_CREDENTIALS" --quiet
+        ACCESS_TOKEN=$(gcloud auth print-access-token)
+        jq -cs '{rows: [.[] | {insertId: (.repository + "-" + (.number | tostring) + "-" + .recorded_at), json: .}]}' "$ROWS_FILE" \
+          > "$RUNNER_TEMP/pr-insert.json"
+        response=$(curl -sS --retry 3 --retry-all-errors -X POST \
+          -H "Authorization: Bearer $ACCESS_TOKEN" -H 'Content-Type: application/json' \
+          'https://bigquery.googleapis.com/bigquery/v2/projects/side-dw/datasets/github/tables/pull_requests/insertAll' \
+          --data-binary @"$RUNNER_TEMP/pr-insert.json")
+        if jq -e '.insertErrors // .error' <<<"$response" >/dev/null; then
+          echo "::warning::BigQuery insert into pull_requests failed: $response"
+          exit 1
+        fi
+        echo "Recorded $(wc -l < "$ROWS_FILE" | tr -d ' ') pull request(s) in side-dw.github.pull_requests"

@@ -277,6 +277,14 @@ jobs:
           engine-spec: ${{ inputs.GRADUATION_NOTES_SPEC }}
           engine-bin: ${{ inputs.GRADUATION_NOTES_ENGINE_BIN }}
 
+      # AI v2 M1 (PLAT-12247): record the PRs merged by this push, metadata only, in side-dw.github.pull_requests
+      - name: PR analytics
+        if: always() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: reside-eng/workflow-templates-library/.github/actions/pr-analytics@v1
+        with:
+          CI_SERVICE_ACCOUNT: ${{ secrets.LIBRARY_CI_SERVICE_ACCOUNT }}
+
       - name: CI Analytics
         if: always()
         continue-on-error: true
